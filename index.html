@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Stickman Arena Online</title>
+    <style>
+        body { margin: 0; background: #111; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; user-select: none; }
+        
+        /* MÀN HÌNH MENU */
+        #menu-screen { position: absolute; z-index: 10; background: rgba(0,0,0,0.9); width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        h1 { font-size: 3rem; color: #ff9800; text-transform: uppercase; margin-bottom: 20px; text-shadow: 0 0 10px red; }
+        .btn { padding: 15px 30px; margin: 10px; font-size: 1.2rem; cursor: pointer; background: #333; color: white; border: 2px solid #555; border-radius: 5px; transition: 0.3s; }
+        .btn:hover { background: #ff9800; color: black; border-color: #ff9800; }
+        .btn:disabled { background: #222; color: #666; cursor: not-allowed; }
+        
+        .status-text { color: #4CAF50; font-size: 1.3rem; margin: 20px; }
+        
+        /* HUD & GAME */
+        #game-container { position: relative; display: none; box-shadow: 0 0 20px #000; }
+        canvas { background: #222; border: 2px solid #444; cursor: crosshair; }
+        
+        .hud { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-between; padding: 0 20px; box-sizing: border-box; font-size: 1.2rem; font-weight: bold; text-shadow: 1px 1px 2px black; pointer-events: none;}
+        .p1-stats { color: #4facfe; }
+        .p2-stats { color: #ff0844; text-align: right; }
+        .reload-indicator { color: #ffd700; font-size: 0.9rem; }
+
+        .ping-indicator { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); color: #4CAF50; font-size: 0.9rem; }
+        
+        .controls-hint { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: #777; font-size: 0.9rem; pointer-events: none;}
+    </style>
+</head>
+<body>
+
+    <div id="menu-screen">
+        <h1>🎮 Stickman Arena Online 🎮</h1>
+        
+        <div class="status-text" id="status-text">Sẵn sàng chơi!</div>
+        
+        <button class="btn" id="btn-find-match" onclick="findMatch()">TÌM TRẬN ĐẤU ONLINE</button>
+        <button class="btn" onclick="playOffline()" style="background: #555;">Chơi Offline (1 Người)</button>
+        
+        <div style="margin-top: 30px; color: #888; font-size: 0.9rem;">
+            💡 Kết nối với server để chơi với người khác qua mạng
+        </div>
+    </div>
+
+    <div id="game-container">
+        <div class="hud">
+            <div class="p1-stats">
+                <span id="p1-name">BẠN</span><br>
+                HP: <span id="p1-hp">5</span> | Đạn: <span id="p1-mag">10</span>/<span id="p1-ammo">30</span>
+                <div class="reload-indicator" id="p1-reload" style="display:none;">⟳ ĐANG NẠP...</div>
+            </div>
+            <div class="p2-stats">
+                <span id="p2-name">ĐỐI THỦ</span><br>
+                HP: <span id="p2-hp">5</span> | Đạn: <span id="p2-mag">10</span>/<span id="p2-ammo">30</span>
+                <div class="reload-indicator" id="p2-reload" style="display:none;">⟳ ĐANG NẠP...</div>
+            </div>
+        </div>
+        
+        <div class="ping-indicator" id="ping">🌐 Ping: -- ms</div>
+        
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div class="controls-hint">Di chuyển: WASD | Bắn: GIỮ CHUỘT & KÉO | Nạp đạn: R</div>
+    </div>
+
+<script>
+    // --- WEBSOCKET CONNECTION ---
+    let ws = null;
+    let myPlayerId = null;
+    let roomId = null;
+    let isOnlineMode = false;
+    let lastPingTime = 0;
+    
+    function connectWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host || 'localhost:3000';
+        ws = new WebSocket(`${protocol}//${host}`);
+        
+        ws.onopen = () => {
+            console.log('✅ Kết nối server thành công!');
+            updateStatus('Đã kết nối server!', '#4CAF50');
+        };
+        
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            handleServerMessage(data);
+        };
+        
+        ws.onerror = (error) => {
+            console.error('❌ Lỗi WebSocket:', error);
+            updateStatus('Lỗi kết nối! Thử lại sau...', '#f44336');
+        };
+        
+        ws.onclose = () => {
+            console.log('🔌 Ngắt kết nối server');
+            if (isGameRunning) {
+                endGame('Mất kết nối với server!');
+            }
+        };
+    }
+    
+    function findMatch() {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            connectWebSocket();
+            setTimeout(() => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    findMatch();
+                }
+            }, 1000);
+            return;
+        }
+        
+        isOnlineMode = true;
+        updateStatus('Đang tìm đối thủ...', '#FFC107');
+        document.getElementById('btn-find-match').disabled = true;
+        
+        ws.send(JSON.stringify({ type: 'find_match' }));
+    }
+    
+    function playOffline() {
+        isOnlineMode = false;
+        myPlayerId = 1;
+        startGame();
+    }
+    
+    function updateStatus(text, color = '#4CAF50') {
+        const statusEl = document.getElementById('status-text');
+        statusEl.innerText = text;
+        statusEl.style.color = color;
+    }
+    
+    function handleServerMessage(data) {
+        switch (data.type) {
+            case 'waiting':
+                updateStatus(data.message, '#FFC107');
+                break;
+                
+            case 'match_found':
+                myPlayerId = data.playerId;
+                roomId = data.roomId;
+                updateStatus('Đã tìm thấy đối thủ! Đang bắt đầu...', '#4CAF50');
+                break;
+                
+            case 'game_start':
+                startGame(data.gameState);
+                break;
+                
+            case 'opponent_update':
+                updateOpponent(data);
+                break;
+                
+            case 'opponent_shoot':
+                addOpponentBullet(data.bullet);
+                break;
+                
+            case 'opponent_reload':
+                showOpponentReload(data.playerId);
+                break;
+                
+            case 'item_collected':
+                removeItem(data.itemId);
+                break;
+                
+            case 'item_spawn':
+                addItem(data.item);
+                break;
+                
+            case 'player_damaged':
+                updatePlayerHP(data.playerId, data.hp);
+                break;
+                
+            case 'game_over':
+                const won = data.winnerId === myPlayerId;
+                endGame(won ? 'BẠN THẮNG! 🎉' : 'BẠN THUA! 😢');
+                break;
+                
+            case 'player_left':
+                endGame('Đối thủ đã rời phòng');
+                break;
+        }
+    }
+
+    // --- CẤU HÌNH GAME ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    let isGameRunning = false;
+    
+    // --- CƠ CHẾ BẮN CHUỘT ---
+    let mouseDown = false;
+    let mouseStartTime = 0;
+    let mouseX = 0, mouseY = 0;
+    let chargePower = 0;
+    const MAX_CHARGE_TIME = 2000;
+    const MIN_BULLET_SPEED = 5;
+    const MAX_BULLET_SPEED = 15;
+
+    // --- GAME CONSTANTS ---
+    const TILE_SIZE = 40;
+    const PLAYER_SPEED = 4;
+    const MAG_SIZE = 10;
+    const RELOAD_TIME = 1500;
+    const STARTING_AMMO = 30;
+
+    let players = [];
+    let bullets = [];
+    let items = [];
+    let obstacles = [];
+
+    // --- KHỞI TẠO GAME ---
+    function startGame(initialState = null) {
+        document.getElementById('menu-screen').style.display = 'none';
+        document.getElementById('game-container').style.display = 'block';
+        
+        if (initialState) {
+            // Online mode - use server state
+            players = initialState.players.map(p => ({
+                ...p,
+                dirX: 0, dirY: 0, cd: 0,
+                reloading: false, reloadTimer: 0
+            }));
+            obstacles = initialState.obstacles;
+            items = initialState.items;
+        } else {
+            // Offline mode
+            players = [
+                { id: 1, x: 50, y: 50, color: '#4facfe', hp: 5, mag: MAG_SIZE, ammo: STARTING_AMMO, dirX: 0, dirY: 0, cd: 0, reloading: false, reloadTimer: 0 },
+                { id: 2, x: 700, y: 500, color: '#ff0844', hp: 5, mag: MAG_SIZE, ammo: STARTING_AMMO, dirX: 0, dirY: 0, cd: 0, reloading: false, reloadTimer: 0 }
+            ];
+            
+            obstacles = [];
+            for(let i=0; i<8; i++) {
+                obstacles.push({
+                    x: 100 + Math.random() * 600,
+                    y: 100 + Math.random() * 400,
+                    w: 60, h: 60
+                });
+            }
+            
+            items = [];
+            spawnItem('HP');
+            spawnItem('AMMO');
+            spawnItem('AMMO');
+        }
+        
+        bullets = [];
+        isGameRunning = true;
+        gameLoop();
+        
+        if (!isOnlineMode) {
+            setInterval(() => { 
+                if(isGameRunning) spawnItem(Math.random()>0.5 ? 'HP' : 'AMMO'); 
+            }, 5000);
+        }
+    }
+
+    function spawnItem(type) {
+        const item = {
+            type: type,
+            x: 50 + Math.random() * 700,
+            y: 50 + Math.random() * 500,
+            size: 20,
+            color: type === 'HP' ? '#00ff00' : '#ffd700',
+            id: Date.now() + Math.random()
+        };
+        items.push(item);
+        return item;
+    }
+    
+    function addItem(item) {
+        item.color = item.type === 'HP' ? '#00ff00' : '#ffd700';
+        items.push(item);
+    }
+    
+    function removeItem(itemId) {
+        items = items.filter(i => i.id !== itemId);
+    }
+
+    // --- INPUT HANDLING ---
+    const keys = {};
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    canvas.addEventListener('mousedown', (e) => {
+        if (!isGameRunning) return;
+        const rect = canvas.getBoundingClientRect();
+        mouseX = e.clientX - rect.left;
+        mouseY = e.clientY - rect.top;
+        mouseDown = true;
+        mouseStartTime = Date.now();
+        chargePower = 0;
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        if (!isGameRunning) return;
+        const rect = canvas.getBoundingClientRect();
+        mouseX = e.clientX - rect.left;
+        mouseY = e.clientY - rect.top;
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+        if (!isGameRunning || !mouseDown) return;
+        mouseDown = false;
+        
+        let myPlayer = getMyPlayer();
+        if (myPlayer && myPlayer.mag > 0 && myPlayer.cd <= 0 && !myPlayer.reloading) {
+            shootWithMouse(myPlayer, mouseX, mouseY, chargePower);
+        }
+        chargePower = 0;
+    });
+
+    // --- RELOAD FUNCTIONS ---
+    function startReload(player) {
+        if (player.reloading || player.mag === MAG_SIZE || player.ammo === 0) return;
+        
+        player.reloading = true;
+        player.reloadTimer = RELOAD_TIME;
+        
+        let reloadId = player.id === myPlayerId ? 'p1-reload' : 'p2-reload';
+        document.getElementById(reloadId).style.display = 'block';
+        
+        if (isOnlineMode && player.id === myPlayerId) {
+            ws.send(JSON.stringify({
+                type: 'reload',
+                playerId: myPlayerId
+            }));
+        }
+    }
+
+    function updateReload(player) {
+        if (!player.reloading) return;
+        
+        player.reloadTimer -= 16;
+        
+        if (player.reloadTimer <= 0) {
+            let ammoNeeded = MAG_SIZE - player.mag;
+            let ammoToReload = Math.min(ammoNeeded, player.ammo);
+            
+            player.mag += ammoToReload;
+            player.ammo -= ammoToReload;
+            
+            player.reloading = false;
+            player.reloadTimer = 0;
+            
+            let reloadId = player.id === myPlayerId ? 'p1-reload' : 'p2-reload';
+            document.getElementById(reloadId).style.display = 'none';
+        }
+    }
+    
+    function showOpponentReload(playerId) {
+        const opponent = players.find(p => p.id === playerId);
+        if (opponent) {
+            startReload(opponent);
+        }
+    }
+
+    // --- GAME LOOP ---
+    function gameLoop() {
+        if (!isGameRunning) return;
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    function getMyPlayer() {
+        return players.find(p => p.id === myPlayerId);
+    }
+    
+    function getOpponent() {
+        return players.find(p => p.id !== myPlayerId);
+    }
+
+    function update() {
+        if (mouseDown) {
+            let elapsed = Date.now() - mouseStartTime;
+            chargePower = Math.min(elapsed / MAX_CHARGE_TIME, 1);
+        }
+
+        let myPlayer = getMyPlayer();
+        if (!myPlayer) return;
+        
+        updateReload(myPlayer);
+        
+        if (!myPlayer.reloading) {
+            myPlayer.dirX = 0;
+            myPlayer.dirY = 0;
+            if (keys['KeyW']) myPlayer.dirY = -1;
+            if (keys['KeyS']) myPlayer.dirY = 1;
+            if (keys['KeyA']) myPlayer.dirX = -1;
+            if (keys['KeyD']) myPlayer.dirX = 1;
+            movePlayer(myPlayer);
+            
+            if (keys['Space'] && myPlayer.cd <= 0) shoot(myPlayer);
+        }
+        
+        if (keys['KeyR']) {
+            startReload(myPlayer);
+        }
+        
+        if (myPlayer.mag === 0 && myPlayer.ammo > 0 && !myPlayer.reloading) {
+            startReload(myPlayer);
+        }
+        
+        if (myPlayer.cd > 0) myPlayer.cd--;
+        
+        // Send update to server
+        if (isOnlineMode && ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'player_update',
+                playerId: myPlayerId,
+                x: myPlayer.x,
+                y: myPlayer.y,
+                dirX: myPlayer.dirX,
+                dirY: myPlayer.dirY,
+                hp: myPlayer.hp,
+                mag: myPlayer.mag,
+                ammo: myPlayer.ammo,
+                reloading: myPlayer.reloading
+            }));
+        }
+        
+        // Update opponent (offline AI)
+        if (!isOnlineMode) {
+            let opponent = getOpponent();
+            if (opponent) {
+                updateReload(opponent);
+                runSimpleAI(opponent, myPlayer);
+                if (opponent.cd > 0) opponent.cd--;
+            }
+        } else {
+            // Update opponent reload
+            let opponent = getOpponent();
+            if (opponent) {
+                updateReload(opponent);
+                if (opponent.cd > 0) opponent.cd--;
+            }
+        }
+
+        // Update bullets
+        bullets.forEach((b, index) => {
+            b.x += b.vx;
+            b.y += b.vy;
+            
+            let hitWall = obstacles.some(o => rectIntersect(b.x, b.y, 5, 5, o.x, o.y, o.w, o.h));
+            if (hitWall || b.x < 0 || b.x > 800 || b.y < 0 || b.y > 600) {
+                bullets.splice(index, 1);
+                return;
+            }
+
+            players.forEach(p => {
+                if (p.id !== b.ownerId && rectIntersect(b.x, b.y, 10, 10, p.x, p.y, TILE_SIZE, TILE_SIZE)) {
+                    p.hp--;
+                    bullets.splice(index, 1);
+                    
+                    if (isOnlineMode && b.ownerId === myPlayerId) {
+                        ws.send(JSON.stringify({
+                            type: 'player_hit',
+                            playerId: myPlayerId,
+                            targetId: p.id,
+                            hp: p.hp
+                        }));
+                    }
+                    
+                    checkWin();
+                }
+            });
+        });
+
+        // Collect items
+        players.forEach(p => {
+            items.forEach((item, index) => {
+                if (rectIntersect(p.x, p.y, TILE_SIZE, TILE_SIZE, item.x, item.y, item.size, item.size)) {
+                    if (item.type === 'HP' && p.hp < 5) { 
+                        p.hp++; 
+                        
+                        if (isOnlineMode && p.id === myPlayerId) {
+                            ws.send(JSON.stringify({
+                                type: 'item_collect',
+                                itemId: item.id,
+                                playerId: myPlayerId
+                            }));
+                        }
+                        
+                        items.splice(index, 1); 
+                    }
+                    if (item.type === 'AMMO') { 
+                        p.ammo += 10;
+                        
+                        if (isOnlineMode && p.id === myPlayerId) {
+                            ws.send(JSON.stringify({
+                                type: 'item_collect',
+                                itemId: item.id,
+                                playerId: myPlayerId
+                            }));
+                        }
+                        
+                        items.splice(index, 1); 
+                    }
+                }
+            });
+        });
+
+        updateHUD();
+    }
+    
+    function updateOpponent(data) {
+        const opponent = players.find(p => p.id === data.playerId);
+        if (opponent) {
+            opponent.x = data.x;
+            opponent.y = data.y;
+            opponent.dirX = data.dirX;
+            opponent.dirY = data.dirY;
+            opponent.hp = data.hp;
+            opponent.mag = data.mag;
+            opponent.ammo = data.ammo;
+            opponent.reloading = data.reloading;
+        }
+    }
+    
+    function updatePlayerHP(playerId, hp) {
+        const player = players.find(p => p.id === playerId);
+        if (player) {
+            player.hp = hp;
+        }
+    }
+    
+    function addOpponentBullet(bullet) {
+        bullets.push(bullet);
+    }
+
+    // Simple AI for offline mode
+    function runSimpleAI(bot, target) {
+        if (bot.reloading) return;
+        
+        if (bot.mag === 0 && bot.ammo > 0) {
+            startReload(bot);
+            return;
+        }
+        
+        let distToTarget = getDist(bot, target);
+        
+        bot.dirX = 0;
+        bot.dirY = 0;
+        
+        if (distToTarget > 150) {
+            if (target.x > bot.x + 10) bot.dirX = 1;
+            else if (target.x < bot.x - 10) bot.dirX = -1;
+            
+            if (target.y > bot.y + 10) bot.dirY = 1;
+            else if (target.y < bot.y - 10) bot.dirY = -1;
+        }
+        
+        movePlayer(bot);
+        
+        if (bot.cd <= 0 && bot.mag > 0) {
+            shoot(bot, target);
+        }
+    }
+
+    function movePlayer(p) {
+        let nextX = p.x + p.dirX * PLAYER_SPEED;
+        let nextY = p.y + p.dirY * PLAYER_SPEED;
+        let hit = obstacles.some(o => rectIntersect(nextX, nextY, TILE_SIZE, TILE_SIZE, o.x, o.y, o.w, o.h));
+        if (!hit && nextX >= 0 && nextX <= 800 - TILE_SIZE) p.x = nextX;
+        if (!hit && nextY >= 0 && nextY <= 600 - TILE_SIZE) p.y = nextY;
+    }
+
+    function shoot(p, target = null) {
+        if (p.mag <= 0 || p.reloading) return;
+        
+        p.mag--;
+        p.cd = 25;
+
+        let centerX = p.x + TILE_SIZE/2;
+        let centerY = p.y + TILE_SIZE/2;
+        
+        let vx, vy;
+        const BULLET_SPEED = 8;
+        
+        if (target) { 
+            let angle = Math.atan2((target.y+TILE_SIZE/2) - centerY, (target.x+TILE_SIZE/2) - centerX);
+            vx = Math.cos(angle) * BULLET_SPEED;
+            vy = Math.sin(angle) * BULLET_SPEED;
+        } else { 
+             let dx = p.dirX;
+             let dy = p.dirY;
+             if(dx === 0 && dy === 0) dx = 1; 
+             let len = Math.sqrt(dx*dx + dy*dy);
+             vx = (dx/len) * BULLET_SPEED;
+             vy = (dy/len) * BULLET_SPEED;
+        }
+        
+        const bullet = { x: centerX, y: centerY, vx: vx, vy: vy, ownerId: p.id };
+        bullets.push(bullet);
+        
+        if (isOnlineMode && p.id === myPlayerId) {
+            ws.send(JSON.stringify({
+                type: 'shoot',
+                bullet: bullet
+            }));
+        }
+    }
+
+    function shootWithMouse(p, targetX, targetY, power) {
+        if (p.mag <= 0 || p.reloading) return;
+        
+        p.mag--;
+        p.cd = 25;
+
+        let centerX = p.x + TILE_SIZE/2;
+        let centerY = p.y + TILE_SIZE/2;
+        
+        let angle = Math.atan2(targetY - centerY, targetX - centerX);
+        let bulletSpeed = MIN_BULLET_SPEED + (MAX_BULLET_SPEED - MIN_BULLET_SPEED) * power;
+        
+        let vx = Math.cos(angle) * bulletSpeed;
+        let vy = Math.sin(angle) * bulletSpeed;
+        
+        const bullet = { 
+            x: centerX, 
+            y: centerY, 
+            vx: vx, 
+            vy: vy, 
+            ownerId: p.id,
+            power: power
+        };
+        bullets.push(bullet);
+        
+        if (isOnlineMode && p.id === myPlayerId) {
+            ws.send(JSON.stringify({
+                type: 'shoot',
+                bullet: bullet
+            }));
+        }
+    }
+
+    function drawStickFigure(ctx, p) {
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+
+        const cX = p.x + TILE_SIZE / 2;
+        const topY = p.y;
+        const bottomY = p.y + TILE_SIZE;
+
+        ctx.arc(cX, topY + 10, 8, 0, Math.PI * 2);
+        ctx.moveTo(cX, topY + 18);
+        ctx.lineTo(cX, topY + 30);
+        ctx.moveTo(cX - 15, topY + 22);
+        ctx.lineTo(cX + 15, topY + 22);
+        ctx.moveTo(cX, topY + 30);
+        ctx.lineTo(cX - 10, bottomY);
+        ctx.moveTo(cX, topY + 30);
+        ctx.lineTo(cX + 10, bottomY);
+
+        ctx.stroke();
+    }
+
+    function draw() {
+        ctx.fillStyle = '#222';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = '#444';
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 2;
+        obstacles.forEach(o => {
+            ctx.fillRect(o.x, o.y, o.w, o.h);
+            ctx.strokeRect(o.x, o.y, o.w, o.h);
+        });
+
+        items.forEach(i => {
+            ctx.fillStyle = i.color;
+            ctx.beginPath();
+            ctx.arc(i.x + i.size/2, i.y + i.size/2, i.size/2, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = 'black';
+            ctx.font = 'bold 10px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(i.type, i.x + i.size/2, i.y + i.size/2 + 4);
+        });
+
+        players.forEach(p => {
+            if(p.hp > 0) {
+                drawStickFigure(ctx, p);
+
+                ctx.fillStyle = 'red';
+                ctx.fillRect(p.x, p.y - 12, TILE_SIZE, 4);
+                ctx.fillStyle = '#0f0';
+                ctx.fillRect(p.x, p.y - 12, (p.hp/5)*TILE_SIZE, 4);
+                
+                if (p.reloading) {
+                    let reloadProgress = 1 - (p.reloadTimer / RELOAD_TIME);
+                    ctx.fillStyle = 'rgba(100, 100, 100, 0.7)';
+                    ctx.fillRect(p.x, p.y - 20, TILE_SIZE, 4);
+                    ctx.fillStyle = '#ffd700';
+                    ctx.fillRect(p.x, p.y - 20, TILE_SIZE * reloadProgress, 4);
+                }
+            }
+        });
+
+        bullets.forEach(b => {
+            let bulletSize = 3 + (b.power || 0) * 3;
+            ctx.fillStyle = 'yellow';
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, bulletSize, 0, Math.PI*2);
+            ctx.fill();
+        });
+
+        if (mouseDown && getMyPlayer() && getMyPlayer().hp > 0) {
+            let p1 = getMyPlayer();
+            let centerX = p1.x + TILE_SIZE/2;
+            let centerY = p1.y + TILE_SIZE/2;
+
+            ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(mouseX, mouseY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            let powerBarWidth = 100;
+            let powerBarHeight = 10;
+            let powerBarX = centerX - powerBarWidth/2;
+            let powerBarY = p1.y - 25;
+
+            ctx.fillStyle = 'rgba(50, 50, 50, 0.8)';
+            ctx.fillRect(powerBarX, powerBarY, powerBarWidth, powerBarHeight);
+
+            let powerColor = chargePower < 0.5 ? '#ffeb3b' : (chargePower < 0.8 ? '#ff9800' : '#f44336');
+            ctx.fillStyle = powerColor;
+            ctx.fillRect(powerBarX, powerBarY, powerBarWidth * chargePower, powerBarHeight);
+
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(powerBarX, powerBarY, powerBarWidth, powerBarHeight);
+
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 10px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${Math.round(chargePower * 100)}%`, centerX, powerBarY - 3);
+        }
+    }
+
+    function updateHUD() {
+        let myPlayer = getMyPlayer();
+        let opponent = getOpponent();
+        
+        if (myPlayer) {
+            document.getElementById('p1-hp').innerText = myPlayer.hp;
+            document.getElementById('p1-mag').innerText = myPlayer.mag;
+            document.getElementById('p1-ammo').innerText = myPlayer.ammo;
+        }
+        
+        if (opponent) {
+            document.getElementById('p2-hp').innerText = opponent.hp;
+            document.getElementById('p2-mag').innerText = opponent.mag;
+            document.getElementById('p2-ammo').innerText = opponent.ammo;
+        }
+    }
+
+    function checkWin() {
+        let myPlayer = getMyPlayer();
+        let opponent = getOpponent();
+        
+        if (!myPlayer || !opponent) return;
+        
+        if (myPlayer.hp <= 0) endGame('BẠN THUA! 😢');
+        else if (opponent.hp <= 0) endGame('BẠN THẮNG! 🎉');
+    }
+
+    function endGame(msg) {
+        isGameRunning = false;
+        setTimeout(() => {
+            alert(msg);
+            location.reload();
+        }, 100);
+    }
+
+    function getDist(o1, o2) { 
+        return Math.sqrt(Math.pow(o1.x - o2.x, 2) + Math.pow(o1.y - o2.y, 2)); 
+    }
+    
+    function rectIntersect(x1, y1, w1, h1, x2, y2, w2, h2) { 
+        return x2 < x1 + w1 && x2 + w2 > x1 && y2 < y1 + h1 && y2 + h2 > y1; 
+    }
+
+    // Auto connect on load
+    window.addEventListener('load', () => {
+        connectWebSocket();
+    });
+</script>
+</body>
+</html>
