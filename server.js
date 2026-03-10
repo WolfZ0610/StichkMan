@@ -140,12 +140,21 @@ const httpServer = http.createServer(async (req,res) => {
   if (req.method==='POST' && url==='/api/stats') {
     const p = verifyToken(getToken(req));
     if (!p) return json(res,401,{error:'Unauthorized'});
-    const {result} = await parseBody(req); // 'win' | 'loss'
+    const {result, mode} = await parseBody(req); // result: 'win'|'loss', mode: 'online'|'campaign'|'practice'
     const db = loadUsers();
     const user = db[p.username.toLowerCase()];
     if (!user) return json(res,404,{error:'User not found'});
+
+    // Stats tổng
     if (result==='win')  user.stats.wins++;
     if (result==='loss') user.stats.losses++;
+
+    // Stats theo mode
+    const m = ['online','campaign','practice'].includes(mode) ? mode : 'practice';
+    if (!user.stats[m]) user.stats[m] = {wins:0, losses:0};
+    if (result==='win')  user.stats[m].wins++;
+    if (result==='loss') user.stats[m].losses++;
+
     saveUsers(db);
     return json(res,200,{ok:true, stats:user.stats});
   }
@@ -171,6 +180,21 @@ const httpServer = http.createServer(async (req,res) => {
     const user = db[p.username.toLowerCase()];
     if (!user) return json(res,404,{error:'User not found'});
     return json(res,200,{shopData: user.shopData || null});
+  }
+
+  // GET /api/leaderboard — top players by mode
+  if (req.method==='GET' && url.startsWith('/api/leaderboard')) {
+    const db = loadUsers();
+    const players = Object.values(db).map(u => ({
+      username: u.username,
+      total:  { wins: u.stats?.wins||0,   losses: u.stats?.losses||0 },
+      online:   { wins: u.stats?.online?.wins||0,   losses: u.stats?.online?.losses||0 },
+      campaign: { wins: u.stats?.campaign?.wins||0, losses: u.stats?.campaign?.losses||0 },
+      practice: { wins: u.stats?.practice?.wins||0, losses: u.stats?.practice?.losses||0 },
+      coins:  u.shopData?.coins || 0,
+    }));
+    const active = players.filter(p => p.total.wins + p.total.losses > 0);
+    return json(res, 200, { players: active });
   }
 
   json(res,404,{error:'Not found'});

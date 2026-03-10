@@ -1653,6 +1653,103 @@ canvas{display:block;cursor:crosshair}
 .diff-card.hard    .diff-btn{color:var(--amber);border-color:rgba(255,140,0,.4);background:rgba(255,140,0,.08);}
 .diff-card.extreme .diff-btn{color:var(--red2);border-color:rgba(255,30,60,.4);background:rgba(255,30,60,.08);}
 .diff-btn:hover{filter:brightness(1.2);}
+
+/* ████ LEADERBOARD ████ */
+#lb-screen{
+  background:
+    radial-gradient(ellipse 80% 55% at 50% -10%,rgba(255,215,0,.07) 0%,transparent 55%),
+    radial-gradient(ellipse 45% 60% at 5% 100%,rgba(255,160,0,.05) 0%,transparent 50%),
+    var(--ink2);
+  overflow-y:auto;justify-content:flex-start;padding:28px 0 32px;
+}
+.lb-wrap{
+  position:relative;z-index:5;
+  display:flex;flex-direction:column;align-items:center;
+  width:680px;max-width:96vw;margin:auto;
+}
+.lb-header{text-align:center;margin-bottom:24px;animation:fadeInDown .4s ease both;}
+.lb-tabs{
+  display:flex;width:100%;margin-bottom:18px;
+  border:1px solid var(--bdr-dim);overflow:hidden;
+  clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);
+  animation:fadeInDown .4s ease .05s both;
+}
+.lb-tab{
+  flex:1;padding:10px 0;cursor:pointer;border:none;outline:none;
+  font-family:'Black Ops One',cursive;font-size:.62rem;letter-spacing:2px;
+  background:rgba(255,255,255,.03);color:var(--txt-mid);transition:all .2s;
+}
+.lb-tab.on{background:rgba(255,215,0,.1);color:var(--gold2);border-bottom:2px solid var(--gold2);}
+.lb-tab:hover:not(.on){background:rgba(255,255,255,.06);color:#fff;}
+.lb-table{
+  width:100%;border-collapse:collapse;
+  animation:fadeInUp .35s ease .1s both;
+}
+.lb-table thead tr{
+  background:rgba(255,215,0,.08);
+  border-bottom:1px solid rgba(255,215,0,.2);
+}
+.lb-table thead th{
+  font-family:'Black Ops One',cursive;font-size:.6rem;letter-spacing:.12em;
+  color:var(--gold2);padding:10px 14px;text-align:left;
+}
+.lb-table thead th:last-child{text-align:right;}
+.lb-table tbody tr{
+  border-bottom:1px solid rgba(255,255,255,.04);
+  transition:background .15s;
+}
+.lb-table tbody tr:hover{background:rgba(255,255,255,.04);}
+.lb-table tbody tr.me{background:rgba(255,215,0,.06);border-left:2px solid var(--gold2);}
+.lb-table td{
+  font-family:'Share Tech Mono',monospace;font-size:.72rem;
+  color:var(--txt-mid);padding:11px 14px;
+}
+.lb-rank{font-family:'Black Ops One',cursive;font-size:.85rem;width:40px;}
+.lb-rank.r1{color:#FFD700;text-shadow:0 0 12px rgba(255,215,0,.6);}
+.lb-rank.r2{color:#C0C0C0;text-shadow:0 0 8px rgba(192,192,192,.4);}
+.lb-rank.r3{color:#CD7F32;text-shadow:0 0 8px rgba(205,127,50,.4);}
+.lb-name{color:#fff;font-size:.78rem;font-family:'Rajdhani',sans-serif;font-weight:600;}
+.lb-name .me-tag{
+  font-family:'Share Tech Mono',monospace;font-size:.55rem;
+  color:var(--gold2);border:1px solid rgba(255,215,0,.4);
+  padding:1px 5px;margin-left:6px;vertical-align:middle;
+}
+.lb-val{text-align:right;color:#fff;font-size:.78rem;}
+.lb-val.green{color:var(--green);}
+.lb-val.red{color:var(--red2);}
+.lb-val.gold{color:var(--gold2);}
+.lb-empty{
+  text-align:center;padding:40px;
+  font-family:'Share Tech Mono',monospace;font-size:.7rem;color:var(--txt-dim);
+}
+.lb-loading{
+  text-align:center;padding:30px;
+  font-family:'Share Tech Mono',monospace;font-size:.7rem;color:var(--txt-mid);
+  animation:connPulse .8s ease-in-out infinite alternate;
+}
+.lb-refresh{
+  margin-top:14px;align-self:flex-end;
+  background:none;border:1px solid var(--bdr-dim);color:var(--txt-mid);
+  font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:.06em;
+  padding:6px 14px;cursor:pointer;transition:all .18s;
+}
+.lb-refresh:hover{border-color:var(--gold2);color:var(--gold2);}
+.lb-back{
+  align-self:flex-start;margin-bottom:20px;
+  background:none;border:none;color:var(--txt-mid);cursor:pointer;
+  font-family:'Share Tech Mono',monospace;font-size:.7rem;letter-spacing:.08em;
+  transition:color .18s;display:flex;align-items:center;gap:6px;
+}
+.lb-back:hover{color:#fff;}
+.lb-back::before{content:'←';}
+
+.mbtn.v-lb .mbtn-body{border-color:rgba(255,215,0,.35)}
+.mbtn.v-lb .mbtn-body::after{background:var(--gold2)}
+.mbtn.v-lb:hover .mbtn-body{
+  border-color:rgba(255,215,0,.7);
+  box-shadow:0 0 32px rgba(255,215,0,.15),inset 0 0 24px rgba(255,215,0,.06);
+}
+.mbtn.v-lb .mbtn-title{color:var(--gold2)}
 </style>
 </head>
 <body>
@@ -1792,6 +1889,16 @@ canvas{display:block;cursor:crosshair}
         <div class="mbtn-info">
           <div class="mbtn-title">Cửa Hàng</div>
           <div class="mbtn-sub">Skin · Nâng cấp súng · Passive Buff &nbsp;|&nbsp; <span id="coin-badge" style="color:var(--gold2);font-weight:700;">0</span> 🪙</div>
+        </div>
+        <div class="mbtn-chevron">›</div>
+      </div>
+    </button>
+    <button class="mbtn v-lb" onclick="goLeaderboard()">
+      <div class="mbtn-body">
+        <div class="mbtn-icon">🏆</div>
+        <div class="mbtn-info">
+          <div class="mbtn-title">Bảng Xếp Hạng</div>
+          <div class="mbtn-sub">Top thắng nhiều nhất · Tỉ lệ thắng cao nhất · Coin nhiều nhất</div>
         </div>
         <div class="mbtn-chevron">›</div>
       </div>
@@ -1983,6 +2090,49 @@ canvas{display:block;cursor:crosshair}
     </div>
 
   </div><!-- /online-wrap -->
+</div>
+
+<!-- ████ LEADERBOARD SCREEN ████ -->
+<div class="screen hidden" id="lb-screen">
+  <div class="cbracket cbracket-tl"></div><div class="cbracket cbracket-tr"></div>
+  <div class="cbracket cbracket-bl"></div><div class="cbracket cbracket-br"></div>
+  <div class="lb-wrap">
+    <button class="lb-back" onclick="goLbBack()"> Quay Lại Menu</button>
+    <div class="lb-header">
+      <div class="sec-tag">// THỐNG KÊ TOÀN SERVER</div>
+      <div class="sec-title" style="font-size:2rem;background:linear-gradient(135deg,#fff,var(--gold2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">BẢNG XẾP HẠNG</div>
+      <div class="sec-line" style="background:linear-gradient(90deg,transparent,var(--gold2),transparent)"></div>
+    </div>
+
+    <!-- Tab chế độ -->
+    <div class="lb-tabs" style="margin-bottom:8px">
+      <button class="lb-tab on" id="lbm-total"    onclick="lbSwitchMode('total')">🌐 TẤT CẢ</button>
+      <button class="lb-tab"   id="lbm-online"    onclick="lbSwitchMode('online')">⚡ ONLINE</button>
+      <button class="lb-tab"   id="lbm-campaign"  onclick="lbSwitchMode('campaign')">⚔️ CHIẾN DỊCH</button>
+      <button class="lb-tab"   id="lbm-practice"  onclick="lbSwitchMode('practice')">🎯 LUYỆN TẬP</button>
+    </div>
+
+    <!-- Tab xếp theo -->
+    <div class="lb-tabs" style="margin-bottom:18px">
+      <button class="lb-tab on" id="lbt-wins"   onclick="lbSwitch('wins')">🏆 THẮNG NHIỀU</button>
+      <button class="lb-tab"   id="lbt-ratio"   onclick="lbSwitch('ratio')">📊 TỈ LỆ THẮNG</button>
+      <button class="lb-tab"   id="lbt-coins"   onclick="lbSwitch('coins')">🪙 COIN NHIỀU</button>
+      <button class="lb-tab"   id="lbt-games"   onclick="lbSwitch('games')">🎮 TRẬN NHIỀU</button>
+    </div>
+
+    <!-- Table -->
+    <table class="lb-table" id="lb-table">
+      <thead><tr id="lb-thead-row">
+        <th>#</th><th>NGƯỜI CHƠI</th><th>THẮNG</th><th>THUA</th>
+        <th style="text-align:right">TỔNG TRẬN</th>
+      </tr></thead>
+      <tbody id="lb-tbody">
+        <tr><td colspan="5" class="lb-loading">⟳ Đang tải...</td></tr>
+      </tbody>
+    </table>
+
+    <button class="lb-refresh" onclick="lbLoad()">⟳ Làm mới</button>
+  </div>
 </div>
 
 <!-- ████ PRACTICE / LUYỆN TẬP SCREEN ████ -->
@@ -2815,7 +2965,8 @@ campSave = function() {
 // ── Sync stats sau trận ───────────────────────────────────────
 function syncGameResult(won) {
   if (!currentUser?.token) return;
-  apiCall('POST', '/api/stats', { result: won ? 'win' : 'loss' }, currentUser.token)
+  const mode = isOnline ? 'online' : (isCampaign ? 'campaign' : 'practice');
+  apiCall('POST', '/api/stats', { result: won ? 'win' : 'loss', mode }, currentUser.token)
     .then(data => {
       if (data.stats) {
         currentUser.stats = data.stats;
@@ -3498,6 +3649,126 @@ function goPractice(difficulty) {
   document.getElementById('char-screen')._practiceMode = true;
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// LEADERBOARD
+// ══════════════════════════════════════════════════════════════
+let lbSortMode  = 'wins';   // wins | ratio | coins | games
+let lbGameMode  = 'total';  // total | online | campaign | practice
+
+function goLeaderboard() {
+  document.getElementById('menu-screen').classList.add('hidden');
+  document.getElementById('lb-screen').classList.remove('hidden');
+  lbLoad();
+}
+function goLbBack() {
+  document.getElementById('lb-screen').classList.add('hidden');
+  document.getElementById('menu-screen').classList.remove('hidden');
+}
+
+function lbSwitchMode(mode) {
+  lbGameMode = mode;
+  ['total','online','campaign','practice'].forEach(t =>
+    document.getElementById('lbm-' + t).classList.toggle('on', t === mode)
+  );
+  lbRender(window._lbData || []);
+}
+
+function lbSwitch(mode) {
+  lbSortMode = mode;
+  ['wins','ratio','coins','games'].forEach(t =>
+    document.getElementById('lbt-' + t).classList.toggle('on', t === mode)
+  );
+  lbRender(window._lbData || []);
+}
+
+async function lbLoad() {
+  document.getElementById('lb-tbody').innerHTML =
+    '<tr><td colspan="5" class="lb-loading">⟳ Đang tải...</td></tr>';
+  try {
+    const r = await fetch('/api/leaderboard');
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    window._lbData = data.players || [];
+    lbRender(window._lbData);
+  } catch(e) {
+    document.getElementById('lb-tbody').innerHTML =
+      '<tr><td colspan="5" class="lb-empty">⚠ Không thể tải dữ liệu<br><span style="font-size:.6rem;color:var(--txt-dim)">Kiểm tra kết nối server</span></td></tr>';
+  }
+}
+
+function lbRender(players) {
+  if (!players || !players.length) {
+    document.getElementById('lb-tbody').innerHTML =
+      '<tr><td colspan="5" class="lb-empty">Chưa có dữ liệu · Hãy là người đầu tiên!</td></tr>';
+    return;
+  }
+
+  // Lấy stats theo game mode đang chọn
+  const getStats = p => {
+    if (lbGameMode === 'total')    return p.total;
+    if (lbGameMode === 'online')   return p.online;
+    if (lbGameMode === 'campaign') return p.campaign;
+    if (lbGameMode === 'practice') return p.practice;
+    return p.total;
+  };
+
+  // Lọc người chơi có data trong mode đó
+  let list = players.map(p => ({
+    username: p.username,
+    coins: p.coins || 0,
+    ...getStats(p)
+  })).filter(p => (lbGameMode === 'coins') || (p.wins + p.losses > 0));
+
+  // Sort
+  if (lbSortMode === 'wins')  list.sort((a,b) => b.wins - a.wins);
+  if (lbSortMode === 'ratio') list.sort((a,b) => {
+    const ra = a.wins / Math.max(1, a.wins + a.losses);
+    const rb = b.wins / Math.max(1, b.wins + b.losses);
+    return rb - ra;
+  });
+  if (lbSortMode === 'coins') list.sort((a,b) => b.coins - a.coins);
+  if (lbSortMode === 'games') list.sort((a,b) => (b.wins+b.losses) - (a.wins+a.losses));
+
+  if (!list.length) {
+    const modeNames = {total:'tất cả',online:'Online',campaign:'Chiến Dịch',practice:'Luyện Tập'};
+    document.getElementById('lb-tbody').innerHTML =
+      `<tr><td colspan="5" class="lb-empty">Chưa có dữ liệu ${modeNames[lbGameMode]}<br><span style="font-size:.6rem;color:var(--txt-dim)">Chơi thêm để lên bảng xếp hạng!</span></td></tr>`;
+    return;
+  }
+
+  const me = currentUser?.username?.toLowerCase();
+  const rankIcons = ['🥇','🥈','🥉'];
+  // Header động
+  const modeLabel = {total:'TỔNG',online:'ONLINE',campaign:'CHIẾN DỊCH',practice:'LUYỆN TẬP'}[lbGameMode];
+  const sortLabel  = {wins:'THẮNG NHIỀU',ratio:'TỈ LỆ THẮNG',coins:'COIN',games:'TRẬN NHIỀU'}[lbSortMode];
+  document.getElementById('lb-thead-row').innerHTML = `
+    <th>#</th>
+    <th>NGƯỜI CHƠI <span style="color:var(--txt-dim);font-size:.55rem">[${modeLabel}]</span></th>
+    <th>THẮNG</th><th>THUA</th>
+    <th style="text-align:right">${sortLabel === 'COIN' ? 'COIN 🪙' : 'TỈ LỆ'}</th>`;
+
+  const rows = list.slice(0, 20).map((p, i) => {
+    const rank    = i + 1;
+    const isMe    = p.username.toLowerCase() === me;
+    const ratio   = p.wins / Math.max(1, p.wins + p.losses);
+    const rankCls = rank <= 3 ? `r${rank}` : '';
+    const rankDisp= rank <= 3 ? rankIcons[rank-1] : rank;
+    let col5val;
+    if (lbSortMode === 'coins') col5val = `<span class="lb-val gold">${p.coins.toLocaleString()} 🪙</span>`;
+    else col5val = `<span class="lb-val gold">${(ratio*100).toFixed(1)}%</span>`;
+
+    return `<tr class="${isMe?'me':''}">
+      <td class="lb-rank ${rankCls}">${rankDisp}</td>
+      <td class="lb-name">${p.username}${isMe?'<span class="me-tag">BẠN</span>':''}</td>
+      <td class="lb-val green">${p.wins}</td>
+      <td class="lb-val red">${p.losses}</td>
+      <td style="text-align:right">${col5val}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('lb-tbody').innerHTML = rows;
+}
 // ── Từ Menu: Đấu Với AI → mở char select ──
 function goCharSelect(){
   document.getElementById('menu-screen').classList.add('hidden');
