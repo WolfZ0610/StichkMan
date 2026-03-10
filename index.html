@@ -1378,8 +1378,6 @@ canvas{display:block;cursor:crosshair}
   border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
-#connecting-screen{display:none!important}
-#connecting-screen.show{display:flex!important}
 
 /* ████ SHOP SCREEN ████ */
 #shop-screen{
@@ -1757,35 +1755,24 @@ canvas{display:block;cursor:crosshair}
 <body>
 
 <!-- ████████ CONNECTING SCREEN ████████ -->
-<div class="screen" id="connecting-screen" style="background:var(--ink);z-index:999">
-  <div style="position:relative;z-index:5;text-align:center;display:flex;flex-direction:column;align-items:center;gap:20px">
-    <div style="font-family:'Black Ops One',cursive;font-size:2.2rem;letter-spacing:6px;
-      background:linear-gradient(180deg,#fff 0%,var(--gold3) 40%,var(--gold) 100%);
-      -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-      filter:drop-shadow(0 0 30px rgba(212,160,23,.4))">STICKMAN ARENA</div>
-
-    <!-- Animated stickman loader -->
-    <canvas id="loader-canvas" width="80" height="80" style="margin:4px 0"></canvas>
-
-    <div style="font-family:'Share Tech Mono',monospace;font-size:.75rem;letter-spacing:4px;color:var(--gold);opacity:.9" id="conn-status-txt">
-      ⚡ ĐANG KHỞI ĐỘNG SERVER...
-    </div>
-
-    <!-- Progress bar -->
-    <div style="width:280px;height:4px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden;position:relative">
-      <div id="conn-progress-bar" style="height:100%;width:0%;border-radius:2px;
-        background:linear-gradient(90deg,var(--gold),var(--gold2),var(--gold3));
-        transition:width .4s ease;box-shadow:0 0 10px rgba(212,160,23,.6)"></div>
-    </div>
-
-    <div style="font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--txt-mid);letter-spacing:2px" id="conn-sub-txt">
-      Server miễn phí cần 20–40 giây để khởi động
-    </div>
-
-    <div style="font-family:'Share Tech Mono',monospace;font-size:.55rem;color:var(--txt-dim);letter-spacing:1px;margin-top:-8px" id="conn-timer-txt">
-      Đã chờ: 0s
-    </div>
+<div id="connecting-screen" style="display:none;position:fixed;inset:0;z-index:9999;
+  background:#04040c;flex-direction:column;align-items:center;justify-content:center;gap:20px">
+  <div style="font-family:'Black Ops One',cursive;font-size:2rem;letter-spacing:6px;
+    background:linear-gradient(180deg,#fff 0%,#ffe082 40%,#d4a017 100%);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+    filter:drop-shadow(0 0 30px rgba(212,160,23,.4))">STICKMAN ARENA</div>
+  <canvas id="loader-canvas" width="80" height="80"></canvas>
+  <div id="conn-status-txt" style="font-family:'Share Tech Mono',monospace;font-size:.75rem;
+    letter-spacing:4px;color:#d4a017">⚡ ĐANG KHỞI ĐỘNG SERVER...</div>
+  <div style="width:280px;height:4px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden">
+    <div id="conn-bar" style="height:100%;width:0%;border-radius:2px;transition:width .5s ease;
+      background:linear-gradient(90deg,#d4a017,#f5c842,#ffe082);
+      box-shadow:0 0 10px rgba(212,160,23,.6)"></div>
   </div>
+  <div id="conn-sub-txt" style="font-family:'Share Tech Mono',monospace;font-size:.6rem;
+    color:rgba(255,255,255,.4);letter-spacing:2px">Server miễn phí cần 20–40 giây khởi động</div>
+  <div id="conn-timer" style="font-family:'Share Tech Mono',monospace;font-size:.55rem;
+    color:rgba(255,255,255,.25);letter-spacing:1px">Đã chờ: 0s</div>
 </div>
 
 <!-- ████████ AUTH SCREEN ████████ -->
@@ -2948,20 +2935,10 @@ function onAuthSuccess(data) {
   }
 
   updateUserBadge();
-  // Chỉ goMenu nếu đang ở auth screen, không làm gián đoạn game/char-select/practice/campaign
+  // Chỉ goMenu nếu đang ở auth screen
   const authEl = document.getElementById('auth-screen');
-  const isOnAuthScreen = authEl && !authEl.classList.contains('hidden');
-  const gameActive = (typeof running !== 'undefined' && running)
-    || (document.getElementById('game-wrapper')?.style.display === 'flex');
-  const onOtherScreen = ['char-screen','campaign-screen','practice-screen','online-screen','shop-screen']
-    .some(id => !document.getElementById(id)?.classList.contains('hidden'));
-
-  if (isOnAuthScreen && !gameActive && !onOtherScreen) {
-    authEl.classList.add('hidden');
+  if (authEl && !authEl.classList.contains('hidden')) {
     goMenu();
-  } else if (isOnAuthScreen && !gameActive) {
-    // Đang ở màn hình khác (char select, practice...) → chỉ ẩn auth, không redirect
-    authEl.classList.add('hidden');
   }
 }
 
@@ -3022,139 +2999,92 @@ function syncGameResult(won) {
 // ── Auto-login với token đã lưu ──────────────────────────────
 let _authInitDone = false; // flag: đã xử lý auto-login xong chưa
 
-async function tryAutoLogin() {
-  const token = localStorage.getItem('sa_token');
-  if (!token) {
-    document.getElementById('auth-screen').classList.remove('hidden');
-    return;
-  }
+// ── Item spawn interval (fix leak khi chơi nhiều ván) ─────────
+let _itemSpawnInterval = null;
 
-  // Có token → hiện connecting screen đẹp trong lúc chờ Render cold start
-  const connScreen = document.getElementById('connecting-screen');
-  const authScreen = document.getElementById('auth-screen');
-  connScreen.classList.add('show');
-  authScreen.classList.add('hidden');
-
-  // Khởi động stickman animation
-  _startLoaderAnim();
-
-  // Đếm giây + progress bar giả lập
-  const TIMEOUT_MS = 35000;
-  const startTime = Date.now();
-  const bar = document.getElementById('conn-progress-bar');
-  const timerTxt = document.getElementById('conn-timer-txt');
-  const statusTxt = document.getElementById('conn-status-txt');
-  const subTxt = document.getElementById('conn-sub-txt');
-
-  const tickInterval = setInterval(() => {
-    const elapsed = Date.now() - startTime;
-    const pct = Math.min((elapsed / TIMEOUT_MS) * 90, 90); // tối đa 90% khi còn chờ
-    bar.style.width = pct + '%';
-    timerTxt.textContent = 'Đã chờ: ' + Math.floor(elapsed / 1000) + 's';
-    if (elapsed > 10000) statusTxt.textContent = '⏳ SERVER ĐANG THỨC DẬY...';
-    if (elapsed > 20000) statusTxt.textContent = '☕ SẮP XONG RỒI...';
-    if (elapsed > 28000) subTxt.textContent = 'Gần xong, server free tier hơi chậm 😅';
-  }, 500);
-
-  function _doneConnecting() {
-    clearInterval(tickInterval);
-    _stopLoaderAnim();
-    connScreen.classList.remove('show');
-  }
-
-  let data, status;
-  try {
-    const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    const r = await fetch(API_BASE + '/api/me', {
-      headers: { 'Authorization': 'Bearer ' + token },
-      signal: controller.signal
-    });
-    clearTimeout(tid);
-    status = r.status;
-    data = await r.json();
-  } catch {
-    // Timeout / lỗi mạng → ẩn connecting, hiện auth với thông báo
-    _doneConnecting();
-    authScreen.classList.remove('hidden');
-    setAuthMsg('login-msg', '⚠ Server chưa phản hồi, vui lòng đăng nhập thủ công', true);
-    const loginBtn = document.getElementById('login-btn');
-    if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = 'ĐĂNG NHẬP'; }
-    return;
-  }
-
-  if (status === 401) {
-    _doneConnecting();
-    localStorage.removeItem('sa_token');
-    authScreen.classList.remove('hidden');
-    setAuthMsg('login-msg', 'Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', true);
-    return;
-  }
-
-  if (!data || !data.username) {
-    _doneConnecting();
-    authScreen.classList.remove('hidden');
-    return;
-  }
-
-  // Thành công → hoàn thanh progress bar rồi vào menu
-  bar.style.width = '100%';
-  statusTxt.textContent = '✅ KẾT NỐI THÀNH CÔNG!';
-  await new Promise(r => setTimeout(r, 400));
-  _doneConnecting();
-
-  currentUser = { username: data.username, token, stats: data.stats };
-  if (data.campProgress) campProgress = data.campProgress;
-  apiCall('GET', '/api/shop', null, token).then(r => {
-    if (r.shopData) coinLoad(r.shopData); else coinLoad(null);
-  });
-  updateUserBadge();
-  goMenu();
-}
-
-// ── Stickman loader animation ─────────────────────────────
+// ── Stickman loader ───────────────────────────────────────────
 let _loaderRaf = null;
-function _startLoaderAnim() {
-  const cv = document.getElementById('loader-canvas');
-  if (!cv) return;
-  const cx = cv.getContext('2d');
-  let frame = 0;
-  function draw() {
-    cx.clearRect(0, 0, 80, 80);
-    const t = frame / 12;
-    const bounce = Math.abs(Math.sin(t)) * 6;
-    const legSwing = Math.sin(t * 2) * 14;
-    const armSwing = Math.sin(t * 2 + Math.PI) * 12;
-    cx.strokeStyle = '#d4a017';
-    cx.lineWidth = 2.5;
-    cx.lineCap = 'round';
-    const ox = 40, oy = 18 - bounce;
-    // Đầu
-    cx.beginPath(); cx.arc(ox, oy, 8, 0, Math.PI * 2); cx.stroke();
-    // Thân
-    cx.beginPath(); cx.moveTo(ox, oy + 8); cx.lineTo(ox, oy + 28); cx.stroke();
-    // Tay
+function _startLoader(){
+  const cv=document.getElementById('loader-canvas'); if(!cv)return;
+  const cx=cv.getContext('2d'); let f=0;
+  function draw(){
+    cx.clearRect(0,0,80,80);
+    const t=f/12, bounce=Math.abs(Math.sin(t))*6;
+    const leg=Math.sin(t*2)*14, arm=Math.sin(t*2+Math.PI)*12;
+    cx.strokeStyle='#d4a017'; cx.lineWidth=2.5; cx.lineCap='round';
+    const ox=40, oy=18-bounce;
+    cx.beginPath(); cx.arc(ox,oy,8,0,Math.PI*2); cx.stroke();
     cx.beginPath();
-    cx.moveTo(ox, oy + 14); cx.lineTo(ox - 12, oy + 14 + armSwing);
-    cx.moveTo(ox, oy + 14); cx.lineTo(ox + 12, oy + 14 - armSwing);
-    cx.stroke();
-    // Chân
-    cx.beginPath();
-    cx.moveTo(ox, oy + 28); cx.lineTo(ox - 10, oy + 44 + legSwing * 0.5);
-    cx.moveTo(ox, oy + 28); cx.lineTo(ox + 10, oy + 44 - legSwing * 0.5);
-    cx.stroke();
-    // Glow
-    cx.shadowColor = 'rgba(212,160,23,0.5)';
-    cx.shadowBlur = 8;
-    cx.beginPath(); cx.arc(ox, oy, 8, 0, Math.PI * 2); cx.stroke();
-    cx.shadowBlur = 0;
-    frame++;
-    _loaderRaf = requestAnimationFrame(draw);
+    cx.moveTo(ox,oy+8); cx.lineTo(ox,oy+28);
+    cx.moveTo(ox,oy+14); cx.lineTo(ox-12,oy+14+arm);
+    cx.moveTo(ox,oy+14); cx.lineTo(ox+12,oy+14-arm);
+    cx.moveTo(ox,oy+28); cx.lineTo(ox-10,oy+44+leg*0.5);
+    cx.moveTo(ox,oy+28); cx.lineTo(ox+10,oy+44-leg*0.5);
+    cx.stroke(); f++;
+    _loaderRaf=requestAnimationFrame(draw);
   }
   draw();
 }
-function _stopLoaderAnim() {
-  if (_loaderRaf) { cancelAnimationFrame(_loaderRaf); _loaderRaf = null; }
+function _stopLoader(){
+  if(_loaderRaf){cancelAnimationFrame(_loaderRaf);_loaderRaf=null;}
+}
+
+async function tryAutoLogin() {
+  const token = localStorage.getItem('sa_token');
+  if (!token) return; // auth-screen hiện mặc định
+
+  // Hiện connecting screen
+  const cs = document.getElementById('connecting-screen');
+  const as = document.getElementById('auth-screen');
+  cs.style.display='flex'; as.classList.add('hidden');
+  _startLoader();
+
+  const TIMEOUT=35000, t0=Date.now();
+  const bar=document.getElementById('conn-bar');
+  const statusTxt=document.getElementById('conn-status-txt');
+  const subTxt=document.getElementById('conn-sub-txt');
+  const timerTxt=document.getElementById('conn-timer');
+
+  const tick=setInterval(()=>{
+    const el=Date.now()-t0;
+    bar.style.width=Math.min(el/TIMEOUT*90,90)+'%';
+    timerTxt.textContent='Đã chờ: '+Math.floor(el/1000)+'s';
+    if(el>10000) statusTxt.textContent='⏳ SERVER ĐANG THỨC DẬY...';
+    if(el>20000) statusTxt.textContent='☕ SẮP XONG RỒI...';
+    if(el>28000) subTxt.textContent='Server free tier hơi chậm, sắp vào được 😅';
+  },500);
+
+  function done(){ clearInterval(tick); _stopLoader(); cs.style.display='none'; }
+
+  let data, status;
+  try {
+    const ctrl=new AbortController();
+    const tid=setTimeout(()=>ctrl.abort(), TIMEOUT);
+    const r=await fetch(API_BASE+'/api/me',{headers:{'Authorization':'Bearer '+token},signal:ctrl.signal});
+    clearTimeout(tid); status=r.status; data=await r.json();
+  } catch {
+    done(); as.classList.remove('hidden');
+    setAuthMsg('login-msg','⚠ Server chưa phản hồi, vui lòng đăng nhập lại',true);
+    return;
+  }
+
+  if(status===401){
+    done(); localStorage.removeItem('sa_token');
+    as.classList.remove('hidden');
+    setAuthMsg('login-msg','Phiên đăng nhập hết hạn, vui lòng đăng nhập lại',true);
+    return;
+  }
+  if(!data||!data.username){ done(); as.classList.remove('hidden'); return; }
+
+  // Thành công
+  bar.style.width='100%'; statusTxt.textContent='✅ KẾT NỐI THÀNH CÔNG!';
+  await new Promise(r=>setTimeout(r,400));
+  done();
+  currentUser={username:data.username,token,stats:data.stats};
+  if(data.campProgress) campProgress=data.campProgress;
+  apiCall('GET','/api/shop',null,token).then(r=>{if(r.shopData)coinLoad(r.shopData);else coinLoad(null);});
+  updateUserBadge();
+  goMenu();
 }
 
 // Enter key support
@@ -4176,9 +4106,9 @@ function handleMsg(d){
     case 'opponent_update':
       syncOpp(d); break;
     case 'bullet_spawn':
-      if(running) syncBullet(d); break;
+      if(running) onRemoteBullet(d); break;
     case 'hit_event':
-      if(running) syncHit(d); break;
+      if(running) onRemoteHit(d); break;
     case 'game_over':
       endGame(d.winnerId===myId); break;
     case 'player_left':
@@ -4334,7 +4264,6 @@ const ctx=canvas.getContext('2d');
 const W=1100,H=650,TS=40;
 
 let running=false;
-let _itemSpawnInterval=null;
 let mDown=false,mT0=0,mX=0,mY=0,charge=0;
 const MAX_CH=2000;
 
@@ -4642,35 +4571,28 @@ function move(p,spd){
 // SHOOT
 // ══════════════════════════════════════════
 function shoot(p,tx,ty,pw){
-  // Crit chance từ perk
   const isCrit = p._critChance && Math.random() < p._critChance;
   if(p.mag<=0||p.reloading||p.cd>0)return;
   p.mag--;p.cd=p.gun.cd;
   const cx=p.x+TS/2,cy=p.y+TS/2;
   const ang=Math.atan2(ty-cy,tx-cx);
   const sp=(Math.random()-.5)*p.gun.spread*2;
-
-  let dmg, spd, sz;
+  let dmg,spd,sz;
   if(p.gun.id==='cannon'){
     const charged=pw>0.15;
-    dmg   = charged ? 30 : 10;
-    spd   = (charged ? 14 : 7) * p.bMult;
-    sz    = charged ? 10 : 7;
+    dmg=(charged?30:10); spd=((charged?14:7)*p.bMult); sz=(charged?10:7);
   } else {
-    dmg  = p.gun.damage;
-    spd  = p.gun.bspd * p.bMult;
-    sz   = p.gun.id==='rifle'||p.gun.id==='pistol' ? 4 : 3;
+    dmg=p.gun.damage; spd=p.gun.bspd*p.bMult;
+    sz=p.gun.id==='rifle'||p.gun.id==='pistol'?4:3;
   }
-
-  const b = {x:cx,y:cy,
-    vx:Math.cos(ang+sp)*spd,
-    vy:Math.sin(ang+sp)*spd,
-    ownerId:p.id, dmg, pw, sz,
-    isCannon: p.gun.id==='cannon'
-  };
+  const b={x:cx,y:cy,vx:Math.cos(ang+sp)*spd,vy:Math.sin(ang+sp)*spd,
+    ownerId:p.id,dmg,pw,sz,isCannon:p.gun.id==='cannon'};
   bullets.push(b);
-  // Online: gửi bullet spawn cho đối thủ render
-  if(isOnline && p.id===myId) sendBulletSpawn(b);
+  // Gửi đạn sang máy đối thủ để render
+  if(isOnline && p.id===myId && ws && ws.readyState===WebSocket.OPEN){
+    ws.send(JSON.stringify({type:'bullet_spawn',
+      x:b.x,y:b.y,vx:b.vx,vy:b.vy,dmg:b.dmg,pw:b.pw,sz:b.sz,isCannon:b.isCannon}));
+  }
 }
 function aiShootAt(p,tx,ty){
   if(p.mag<=0||p.reloading||p.cd>0)return;
@@ -4693,65 +4615,41 @@ function gameLoop(){if(!running||paused)return;update();draw();requestAnimationF
 function me() {return players.find(p=>p.id===myId);}
 function opp(){return players.find(p=>p.id!==myId);}
 
-// ══════════════════════════════════════════
-// ONLINE SYNC ENGINE
-// ══════════════════════════════════════════
-let _lastSendTime = 0;
-const SEND_RATE = 50; // gửi mỗi 50ms (20 lần/giây)
-
-function sendOnlineUpdate() {
-  if (!isOnline || !ws || ws.readyState !== WebSocket.OPEN) return;
-  const now = Date.now();
-  if (now - _lastSendTime < SEND_RATE) return;
-  _lastSendTime = now;
-  const p = me(); if (!p) return;
-  ws.send(JSON.stringify({
-    type: 'player_update',
-    playerId: myId,
-    x: p.x, y: p.y,
-    hp: p.hp,
-    mag: p.mag, ammo: p.ammo,
-    reloading: p.reloading,
-    aimAngle: p.aimAngle,
-    armor: p.armor || 0,
-  }));
+// ── Online sync helpers ─────────────────────────────────────
+let _syncTick=0;
+function _sendMyState(){
+  if(!isOnline||!ws||ws.readyState!==WebSocket.OPEN)return;
+  if(++_syncTick % 3 !== 0) return; // gửi mỗi 3 frame (~50ms @ 60fps)
+  const p=me(); if(!p) return;
+  ws.send(JSON.stringify({type:'player_update',playerId:myId,
+    x:p.x,y:p.y,hp:p.hp,mag:p.mag,ammo:p.ammo,
+    reloading:p.reloading,aimAngle:p.aimAngle,armor:p.armor||0}));
 }
-
-function sendBulletSpawn(b) {
-  if (!isOnline || !ws || ws.readyState !== WebSocket.OPEN) return;
-  ws.send(JSON.stringify({
-    type: 'bullet_spawn',
-    playerId: myId,
-    x: b.x, y: b.y,
-    vx: b.vx, vy: b.vy,
-    dmg: b.dmg, sz: b.sz, pw: b.pw,
-    isCannon: b.isCannon,
-  }));
+function onRemoteBullet(d){
+  bullets.push({x:d.x,y:d.y,vx:d.vx,vy:d.vy,
+    ownerId: myId===1?2:1, // đạn của đối thủ
+    dmg:d.dmg,pw:d.pw,sz:d.sz,isCannon:d.isCannon,
+    _remote:true}); // đánh dấu không tính damage local
 }
-
-function sendHitEvent(targetId, dmg, newHp) {
-  if (!isOnline || !ws || ws.readyState !== WebSocket.OPEN) return;
-  ws.send(JSON.stringify({
-    type: 'hit_event',
-    shooterId: myId,
-    targetId,
-    dmg,
-    newHp,
-  }));
+function onRemoteHit(d){
+  // Nhận xác nhận trúng đạn từ shooter → cập nhật HP
+  const t=players.find(p=>p.id===d.targetId); if(!t) return;
+  t.hp=Math.max(0,d.newHp);
+  spawnFX(t.x+TS/2,t.y+TS/2,'#ff3333');
+  spawnDmg(t.x+TS/2,t.y-10,d.dmg,false,false);
+  checkWin();
 }
 
 function update(){
-  // Chỉ charge cho súng pháo
   const p=me(); if(!p)return;
   if(mDown&&p.gun.id==='cannon') charge=Math.min((Date.now()-mT0)/MAX_CH,1);
   tickRl(p);
-  tickPassivePerks(p); // Shop perks
+  tickPassivePerks(p);
   p.dirX=0;p.dirY=0;
   if(keys['KeyW'])p.dirY=-1; if(keys['KeyS'])p.dirY=1;
   if(keys['KeyA'])p.dirX=-1; if(keys['KeyD'])p.dirX=1;
   move(p,p.speed);
   if(p.cd>0)p.cd--;
-  // Cập nhật góc ngắm theo chuột
   p.aimAngle = Math.atan2(mY-(p.y+TS/2), mX-(p.x+TS/2));
   if(keys['KeyR'])doReload(p);
   if(p.mag===0&&p.ammo>0&&!p.reloading)doReload(p);
@@ -4762,50 +4660,59 @@ function update(){
       tickRl(ai);
       if(ai.mag===0&&ai.ammo>0&&!ai.reloading)doReload(ai);
       runAI(ai,p);
-      // AI ngắm về phía player
-      ai.aimAngle = Math.atan2((p.y+TS/2)-(ai.y+TS/2), (p.x+TS/2)-(ai.x+TS/2));
+      ai.aimAngle=Math.atan2((p.y+TS/2)-(ai.y+TS/2),(p.x+TS/2)-(ai.x+TS/2));
       if(ai.cd>0)ai.cd--;
     }
   } else {
-    // Online: tick đối thủ local (smooth), sync thực từ opponent_update
-    const op=opp(); if(op){
-      tickRl(op);if(op.cd>0)op.cd--;
-      // Nội suy vị trí mượt hơn
+    // Nội suy vị trí đối thủ mượt hơn
+    const op=opp();
+    if(op){
+      tickRl(op); if(op.cd>0)op.cd--;
       if(op._tx!==undefined){
-        op.x += (op._tx - op.x) * 0.35;
-        op.y += (op._ty - op.y) * 0.35;
+        op.x+=(op._tx-op.x)*0.4;
+        op.y+=(op._ty-op.y)*0.4;
       }
     }
-    sendOnlineUpdate(); // Gửi state mình cho đối thủ
+    _sendMyState(); // Gửi state của mình mỗi ~3 frame
   }
 
-  // ── BULLETS — đạn KHÔNG xuyên tường ──
+  // ── BULLETS ──
   for(let i=bullets.length-1;i>=0;i--){
     const b=bullets[i];
-    // Kiểm tra tường TẠI VỊ TRÍ KẾ TIẾP
     const nx=b.x+b.vx,ny=b.y+b.vy;
     const wallHit=obs.some(o=>rHit(nx-2,ny-2,4,4,o.x,o.y,o.w,o.h));
     if(wallHit||nx<0||nx>W||ny<0||ny>H){
       spawnFX(b.x,b.y,'#666');bullets.splice(i,1);continue;
     }
     b.x=nx;b.y=ny;
-    // Hit player — online: chỉ người bắn mới tính damage, rồi gửi hit_event
     let hit=false;
     for(const pl of players){
       if(pl.id===b.ownerId||pl.hp<=0)continue;
       if(rHit(b.x-b.sz,b.y-b.sz,b.sz*2,b.sz*2,pl.x,pl.y,TS,TS)){
-        const armorReduce = (pl.armor||0) / 400;
-        const dmg = Math.max(1, Math.round(b.dmg * (1 - armorReduce)));
-        const armorHit = pl.armor > 0;
-        const isCrit = b.isCannon && b.pw>0.15;
-        // Chỉ tính damage nếu đây là đạn của mình (tránh double-count online)
-        if (!isOnline || (b.ownerId === myId && !b._remote)) {
-          pl.hp = Math.max(0, pl.hp - dmg);
-          if (isOnline) sendHitEvent(pl.id, dmg, pl.hp);
+        const armorReduce=(pl.armor||0)/400;
+        const dmg=Math.max(1,Math.round(b.dmg*(1-armorReduce)));
+        const armorHit=pl.armor>0;
+        const isCrit=b.isCannon&&b.pw>0.15;
+        if(!isOnline){
+          // Offline: tính damage trực tiếp
+          pl.hp=Math.max(0,pl.hp-dmg);
+          spawnFX(b.x,b.y,armorHit?'#fb923c':'#ff3333');
+          spawnDmg(b.x,b.y-10,dmg,isCrit,armorHit);
+          bullets.splice(i,1);hit=true;checkWin();
+        } else if(!b._remote && b.ownerId===myId){
+          // Online + đây là đạn của mình → tính damage + gửi hit_event cho đối thủ xác nhận
+          pl.hp=Math.max(0,pl.hp-dmg);
+          if(ws&&ws.readyState===WebSocket.OPEN)
+            ws.send(JSON.stringify({type:'hit_event',targetId:pl.id,dmg,newHp:pl.hp}));
+          spawnFX(b.x,b.y,armorHit?'#fb923c':'#ff3333');
+          spawnDmg(b.x,b.y-10,dmg,isCrit,armorHit);
+          bullets.splice(i,1);hit=true;checkWin();
+        } else if(b._remote){
+          // Online + đạn remote → chỉ xóa đạn, KHÔNG tính damage (sẽ nhận qua hit_event)
+          spawnFX(b.x,b.y,armorHit?'#fb923c':'#ff3333');
+          bullets.splice(i,1);hit=true;
         }
-        spawnFX(b.x,b.y, armorHit ? '#fb923c' : '#ff3333');
-        spawnDmg(b.x, b.y-10, dmg, isCrit, armorHit);
-        bullets.splice(i,1);hit=true;checkWin();break;
+        break;
       }
     }
     if(hit)continue;
@@ -5774,39 +5681,13 @@ function drawBars(p){
 // UTILS
 // ══════════════════════════════════════════
 function rHit(ax,ay,aw,ah,bx,by,bw,bh){return ax<bx+bw&&ax+aw>bx&&ay<by+bh&&ay+ah>by;}
-
 function syncOpp(d){
   const op=players.find(p=>p.id===d.playerId);
   if(!op) return;
-  // Dùng _tx/_ty để nội suy mượt trong update()
-  op._tx = d.x; op._ty = d.y;
-  op.hp = d.hp;
-  op.mag = d.mag; op.ammo = d.ammo;
-  op.reloading = d.reloading;
-  if(d.aimAngle !== undefined) op.aimAngle = d.aimAngle;
-  if(d.armor !== undefined) op.armor = d.armor;
-}
-
-function syncBullet(d){
-  // Thêm đạn của đối thủ vào local để render (không tính damage — damage do shooter gửi hit_event)
-  bullets.push({
-    x: d.x, y: d.y,
-    vx: d.vx, vy: d.vy,
-    ownerId: d.playerId,
-    dmg: d.dmg, pw: d.pw, sz: d.sz,
-    isCannon: d.isCannon,
-    _remote: true, // đánh dấu đạn từ xa — không tính damage local
-  });
-}
-
-function syncHit(d){
-  // Nhận hit_event từ shooter → cập nhật HP chính xác
-  const target = players.find(p => p.id === d.targetId);
-  if(!target) return;
-  target.hp = Math.max(0, d.newHp);
-  spawnFX(target.x + TS/2, target.y + TS/2, '#ff3333');
-  spawnDmg(target.x + TS/2, target.y - 10, d.dmg, false, false);
-  checkWin();
+  op._tx=d.x; op._ty=d.y; // nội suy mượt trong update()
+  op.hp=d.hp; op.mag=d.mag; op.ammo=d.ammo; op.reloading=d.reloading;
+  if(d.aimAngle!==undefined) op.aimAngle=d.aimAngle;
+  if(d.armor!==undefined) op.armor=d.armor;
 }
 
 window.addEventListener('load',()=>{
