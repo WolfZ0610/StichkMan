@@ -4825,16 +4825,10 @@ function update(){
     // Online: tick đối thủ local (smooth), sync thực từ opponent_update
     const op=opp(); if(op){
       tickRl(op);if(op.cd>0)op.cd--;
-      // Nội suy vị trí: lerp adaptive — snap khi lag spike
+      // Nội suy vị trí mượt hơn
       if(op._tx!==undefined){
-        const dx=op._tx-op.x, dy=op._ty-op.y;
-        const dist=Math.sqrt(dx*dx+dy*dy);
-        if(dist>120){
-          op.x=op._tx; op.y=op._ty; // snap khi lệch quá xa
-        } else {
-          const alpha=Math.min(0.25+dist*0.002, 0.55);
-          op.x+=dx*alpha; op.y+=dy*alpha;
-        }
+        op.x += (op._tx - op.x) * 0.35;
+        op.y += (op._ty - op.y) * 0.35;
       }
     }
     sendOnlineUpdate(); // Gửi state mình cho đối thủ
@@ -5165,34 +5159,34 @@ function runAI(bot,tgt){
 }
 
 function updateHUD(){
-  const p1=me(),p2=opp();
-  function pips(id,mag,mx){
-    const el=document.getElementById(id);if(!el)return;
-    let h='';for(let i=0;i<Math.min(mx,20);i++)h+='<div class="pip'+(i<mag?'':' spent')+'"></div>';
-    el.innerHTML=h;
+  // Xác định slot đúng: nếu online và mình là player 2 thì slot mình = '2'
+  const mySlot  = (isOnline && myId === 2) ? '2' : '1';
+  const oppSlot = (isOnline && myId === 2) ? '1' : '2';
+
+  const pMe = me(), pOp = opp();
+
+  function pips(id, mag, mx){
+    const el = document.getElementById(id); if(!el) return;
+    let h = ''; for(let i=0;i<Math.min(mx,20);i++) h += '<div class="pip'+(i<mag?'':' spent')+'"></div>';
+    el.innerHTML = h;
   }
-  if(p1){
-    document.getElementById('p1-hp').innerText=p1.hp;
-    document.getElementById('p1-ammo').innerText=p1.ammo;
-    const r1=p1.hp/p1.maxHp;
-    document.getElementById('p1-hpf').style.width=(r1*100)+'%';
-    document.getElementById('p1-hpf').classList.toggle('low',r1<.25);
-    document.getElementById('p1-rlf').style.width=p1.reloading?((1-p1.rlTimer/p1.gun.reloadMs)*100)+'%':'0%';
-    pips('p1-mag',p1.mag,p1.gun.magSize);
-    const a1=document.getElementById('p1-armor');
-    if(a1)a1.innerText=Math.round(p1.armor||0)+'/200';
+  function setSlot(slot, pl){
+    if(!pl) return;
+    // HP — làm tròn để tránh hiện số thập phân
+    document.getElementById('p'+slot+'-hp').innerText = Math.ceil(pl.hp);
+    document.getElementById('p'+slot+'-ammo').innerText = pl.ammo;
+    const r = pl.hp / pl.maxHp;
+    document.getElementById('p'+slot+'-hpf').style.width = (Math.max(0,r)*100)+'%';
+    document.getElementById('p'+slot+'-hpf').classList.toggle('low', r < .25);
+    document.getElementById('p'+slot+'-rlf').style.width =
+      pl.reloading ? ((1 - pl.rlTimer/pl.gun.reloadMs)*100)+'%' : '0%';
+    pips('p'+slot+'-mag', pl.mag, pl.gun.magSize);
+    const aEl = document.getElementById('p'+slot+'-armor');
+    if(aEl) aEl.innerText = Math.round(pl.armor||0)+'/200';
   }
-  if(p2){
-    document.getElementById('p2-hp').innerText=p2.hp;
-    document.getElementById('p2-ammo').innerText=p2.ammo;
-    const r2=p2.hp/p2.maxHp;
-    document.getElementById('p2-hpf').style.width=(r2*100)+'%';
-    document.getElementById('p2-hpf').classList.toggle('low',r2<.25);
-    document.getElementById('p2-rlf').style.width=p2.reloading?((1-p2.rlTimer/p2.gun.reloadMs)*100)+'%':'0%';
-    pips('p2-mag',p2.mag,p2.gun.magSize);
-    const a2=document.getElementById('p2-armor');
-    if(a2)a2.innerText=Math.round(p2.armor||0)+'/200';
-  }
+
+  setSlot(mySlot,  pMe);
+  setSlot(oppSlot, pOp);
 }
 function checkWin(){
   const p1=me(),p2=opp();
@@ -5837,19 +5831,23 @@ function drawBars(p){
 function rHit(ax,ay,aw,ah,bx,by,bw,bh){return ax<bx+bw&&ax+aw>bx&&ay<by+bh&&ay+ah>by;}
 
 function syncOpp(d){
-  if(!running) return;
-  // playerId trong tin nhắn = id của người gửi (đối thủ)
-  // Tìm player có id đó, chỉ cần khác myId là đúng đối thủ
-  const op = players.find(p => p.id === d.playerId && p.id !== myId);
+  // opponent_update.playerId = id của người GỬI (đối thủ)
+  // Tìm player có id đó (không phải mình)
+  const senderId = d.playerId;
+  const op = players.find(p => p.id === senderId && p.id !== myId);
   if(!op) return;
-  // Lưu target position để nội suy mượt trong update()
+  // Dùng _tx/_ty để nội suy mượt trong update()
   op._tx = d.x; op._ty = d.y;
-  op._lastSync = Date.now(); // timestamp để detect lag/disconnect
-  op.hp = d.hp;
+  // BUG FIX: KHÔNG cho position-update restore HP đã bị đạn giảm xuống.
+  // Khi A bắn B, A tính B.hp=60 cục bộ ngay lập tức.
+  // Nhưng B vẫn đang gửi player_update{hp:70} (chưa nhận hit_event).
+  // Nếu syncOpp ghi đè op.hp=70 → bar nhảy về 100% → bug hiển thị.
+  // Chỉ chấp nhận hp từ position-update nếu NÓ THẤP HƠN giá trị hiện tại.
+  if(d.hp < op.hp) op.hp = d.hp;
   op.mag = d.mag; op.ammo = d.ammo;
   op.reloading = d.reloading;
   if(d.aimAngle !== undefined) op.aimAngle = d.aimAngle;
-  if(d.armor   !== undefined) op.armor = d.armor;
+  if(d.armor !== undefined) op.armor = d.armor;
 }
 
 function syncBullet(d){
@@ -5871,8 +5869,12 @@ function syncHit(d){
   const target = players.find(p => p.id === d.targetId);
   if(!target) return;
   target.hp = Math.max(0, d.newHp);
+  // Đảm bảo hp không vượt quá maxHp (sanity check)
+  if(target.maxHp) target.hp = Math.min(target.hp, target.maxHp);
   spawnFX(target.x + TS/2, target.y + TS/2, '#ff3333');
   spawnDmg(target.x + TS/2, target.y - 10, d.dmg, false, false);
+  // Cập nhật HUD ngay lập tức (không cần chờ frame update)
+  updateHUD();
   checkWin();
 }
 
