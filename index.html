@@ -4825,10 +4825,16 @@ function update(){
     // Online: tick đối thủ local (smooth), sync thực từ opponent_update
     const op=opp(); if(op){
       tickRl(op);if(op.cd>0)op.cd--;
-      // Nội suy vị trí mượt hơn
+      // Nội suy vị trí: lerp adaptive — snap khi lag spike
       if(op._tx!==undefined){
-        op.x += (op._tx - op.x) * 0.35;
-        op.y += (op._ty - op.y) * 0.35;
+        const dx=op._tx-op.x, dy=op._ty-op.y;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        if(dist>120){
+          op.x=op._tx; op.y=op._ty; // snap khi lệch quá xa
+        } else {
+          const alpha=Math.min(0.25+dist*0.002, 0.55);
+          op.x+=dx*alpha; op.y+=dy*alpha;
+        }
       }
     }
     sendOnlineUpdate(); // Gửi state mình cho đối thủ
@@ -5831,18 +5837,19 @@ function drawBars(p){
 function rHit(ax,ay,aw,ah,bx,by,bw,bh){return ax<bx+bw&&ax+aw>bx&&ay<by+bh&&ay+ah>by;}
 
 function syncOpp(d){
-  // opponent_update.playerId = id của người GỬI (đối thủ)
-  // Tìm player có id đó (không phải mình)
-  const senderId = d.playerId;
-  const op = players.find(p => p.id === senderId && p.id !== myId);
+  if(!running) return;
+  // playerId trong tin nhắn = id của người gửi (đối thủ)
+  // Tìm player có id đó, chỉ cần khác myId là đúng đối thủ
+  const op = players.find(p => p.id === d.playerId && p.id !== myId);
   if(!op) return;
-  // Dùng _tx/_ty để nội suy mượt trong update()
+  // Lưu target position để nội suy mượt trong update()
   op._tx = d.x; op._ty = d.y;
+  op._lastSync = Date.now(); // timestamp để detect lag/disconnect
   op.hp = d.hp;
   op.mag = d.mag; op.ammo = d.ammo;
   op.reloading = d.reloading;
   if(d.aimAngle !== undefined) op.aimAngle = d.aimAngle;
-  if(d.armor !== undefined) op.armor = d.armor;
+  if(d.armor   !== undefined) op.armor = d.armor;
 }
 
 function syncBullet(d){

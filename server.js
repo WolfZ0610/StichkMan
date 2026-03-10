@@ -304,7 +304,8 @@ function handleMsg(ws,msg){
     case 'player_update':{
       const room=rooms.get(ws.roomId);if(!room)return;
       const other=room.host===ws?room.guest:room.host;
-      if(other)send(other,{type:'opponent_update',...msg});break;
+      // FIX: type phải đứng SAU spread — không thì msg.type='player_update' đè lên
+      if(other)send(other,{...msg, type:'opponent_update'});break;
     }
     case 'bullet_spawn':{
       const room=rooms.get(ws.roomId);if(!room)return;
