@@ -1825,7 +1825,7 @@ canvas{display:block;cursor:crosshair}
 </div>
 
 <!-- ████████ MENU ████████ -->
-<div class="screen" id="menu-screen">
+<div class="screen hidden" id="menu-screen">
   <div class="menu-grid"></div>
   <!-- Corner brackets -->
   <div class="cbracket cbracket-tl"></div>
@@ -2981,25 +2981,42 @@ let _authInitDone = false; // flag: đã xử lý auto-login xong chưa
 async function tryAutoLogin() {
   const token = localStorage.getItem('sa_token');
   if (!token) {
-    // Không có token → hiện auth screen (đã visible mặc định, không cần làm gì thêm)
+    document.getElementById('auth-screen').classList.remove('hidden');
     return;
   }
-  // Có token → thử tự đăng nhập, ẩn auth trong lúc chờ
-  document.getElementById('auth-screen').classList.add('hidden');
 
-  const data = await apiCall('GET', '/api/me', null, token);
+  // Có token → hiện auth screen + loading trong lúc chờ server (Render cold start chậm)
+  document.getElementById('auth-screen').classList.remove('hidden');
+  const loginBtn = document.getElementById('login-btn');
+  if (loginBtn) { loginBtn.disabled = true; loginBtn.textContent = '⏳ Đang kết nối...'; }
 
-  // Nếu game đang chạy rồi (user vào guest trong lúc chờ) → không ghi đè
+  let data, status;
+  try {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 15000);
+    const r = await fetch(API_BASE + '/api/me', {
+      headers: { 'Authorization': 'Bearer ' + token },
+      signal: controller.signal
+    });
+    clearTimeout(tid);
+    status = r.status;
+    data = await r.json();
+  } catch {
+    // Lỗi mạng hoặc timeout → KHÔNG xóa token, để user tự đăng nhập
+    if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = 'ĐĂNG NHẬP'; }
+    return;
+  }
+
+  if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = 'ĐĂNG NHẬP'; }
+
+  // Chỉ xóa token nếu server xác nhận rõ ràng là Unauthorized
+  if (status === 401) { localStorage.removeItem('sa_token'); return; }
+
   if (typeof running !== 'undefined' && running) return;
   const gw = document.getElementById('game-wrapper');
   if (gw && gw.style.display === 'flex') return;
 
-  if (data.error || !data.username) {
-    // Token lỗi hoặc server không trả về đúng → xóa token, hiện auth
-    localStorage.removeItem('sa_token');
-    document.getElementById('auth-screen').classList.remove('hidden');
-    return;
-  }
+  if (!data || !data.username) return;
   onAuthSuccess({ ...data, token });
 }
 
