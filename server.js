@@ -306,6 +306,16 @@ function handleMsg(ws,msg){
       const other=room.host===ws?room.guest:room.host;
       if(other)send(other,{type:'opponent_update',...msg});break;
     }
+    case 'bullet_spawn':{
+      const room=rooms.get(ws.roomId);if(!room)return;
+      const other=room.host===ws?room.guest:room.host;
+      if(other)send(other,{type:'bullet_spawn',...msg});break;
+    }
+    case 'hit_event':{
+      const room=rooms.get(ws.roomId);if(!room)return;
+      const other=room.host===ws?room.guest:room.host;
+      if(other)send(other,{type:'hit_event',...msg});break;
+    }
     case 'game_over':{
       const room=rooms.get(ws.roomId);if(!room)return;
       const other=room.host===ws?room.guest:room.host;

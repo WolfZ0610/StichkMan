@@ -4175,6 +4175,10 @@ function handleMsg(d){
       break;
     case 'opponent_update':
       syncOpp(d); break;
+    case 'bullet_spawn':
+      if(running) syncBullet(d); break;
+    case 'hit_event':
+      if(running) syncHit(d); break;
     case 'game_over':
       endGame(d.winnerId===myId); break;
     case 'player_left':
@@ -4648,24 +4652,25 @@ function shoot(p,tx,ty,pw){
 
   let dmg, spd, sz;
   if(p.gun.id==='cannon'){
-    // Pháo: click thường = ST10, giữ charge = ST30
     const charged=pw>0.15;
     dmg   = charged ? 30 : 10;
     spd   = (charged ? 14 : 7) * p.bMult;
     sz    = charged ? 10 : 7;
   } else {
-    // Súng thường: tốc độ cố định, pw=0
     dmg  = p.gun.damage;
     spd  = p.gun.bspd * p.bMult;
     sz   = p.gun.id==='rifle'||p.gun.id==='pistol' ? 4 : 3;
   }
 
-  bullets.push({x:cx,y:cy,
+  const b = {x:cx,y:cy,
     vx:Math.cos(ang+sp)*spd,
     vy:Math.sin(ang+sp)*spd,
     ownerId:p.id, dmg, pw, sz,
     isCannon: p.gun.id==='cannon'
-  });
+  };
+  bullets.push(b);
+  // Online: gửi bullet spawn cho đối thủ render
+  if(isOnline && p.id===myId) sendBulletSpawn(b);
 }
 function aiShootAt(p,tx,ty){
   if(p.mag<=0||p.reloading||p.cd>0)return;
@@ -4687,6 +4692,53 @@ function aiShootAt(p,tx,ty){
 function gameLoop(){if(!running||paused)return;update();draw();requestAnimationFrame(gameLoop);}
 function me() {return players.find(p=>p.id===myId);}
 function opp(){return players.find(p=>p.id!==myId);}
+
+// ══════════════════════════════════════════
+// ONLINE SYNC ENGINE
+// ══════════════════════════════════════════
+let _lastSendTime = 0;
+const SEND_RATE = 50; // gửi mỗi 50ms (20 lần/giây)
+
+function sendOnlineUpdate() {
+  if (!isOnline || !ws || ws.readyState !== WebSocket.OPEN) return;
+  const now = Date.now();
+  if (now - _lastSendTime < SEND_RATE) return;
+  _lastSendTime = now;
+  const p = me(); if (!p) return;
+  ws.send(JSON.stringify({
+    type: 'player_update',
+    playerId: myId,
+    x: p.x, y: p.y,
+    hp: p.hp,
+    mag: p.mag, ammo: p.ammo,
+    reloading: p.reloading,
+    aimAngle: p.aimAngle,
+    armor: p.armor || 0,
+  }));
+}
+
+function sendBulletSpawn(b) {
+  if (!isOnline || !ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({
+    type: 'bullet_spawn',
+    playerId: myId,
+    x: b.x, y: b.y,
+    vx: b.vx, vy: b.vy,
+    dmg: b.dmg, sz: b.sz, pw: b.pw,
+    isCannon: b.isCannon,
+  }));
+}
+
+function sendHitEvent(targetId, dmg, newHp) {
+  if (!isOnline || !ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({
+    type: 'hit_event',
+    shooterId: myId,
+    targetId,
+    dmg,
+    newHp,
+  }));
+}
 
 function update(){
   // Chỉ charge cho súng pháo
@@ -4715,7 +4767,16 @@ function update(){
       if(ai.cd>0)ai.cd--;
     }
   } else {
-    const ai=opp(); if(ai){tickRl(ai);if(ai.cd>0)ai.cd--;}
+    // Online: tick đối thủ local (smooth), sync thực từ opponent_update
+    const op=opp(); if(op){
+      tickRl(op);if(op.cd>0)op.cd--;
+      // Nội suy vị trí mượt hơn
+      if(op._tx!==undefined){
+        op.x += (op._tx - op.x) * 0.35;
+        op.y += (op._ty - op.y) * 0.35;
+      }
+    }
+    sendOnlineUpdate(); // Gửi state mình cho đối thủ
   }
 
   // ── BULLETS — đạn KHÔNG xuyên tường ──
@@ -4728,20 +4789,20 @@ function update(){
       spawnFX(b.x,b.y,'#666');bullets.splice(i,1);continue;
     }
     b.x=nx;b.y=ny;
-    // Hit player
+    // Hit player — online: chỉ người bắn mới tính damage, rồi gửi hit_event
     let hit=false;
     for(const pl of players){
       if(pl.id===b.ownerId||pl.hp<=0)continue;
       if(rHit(b.x-b.sz,b.y-b.sz,b.sz*2,b.sz*2,pl.x,pl.y,TS,TS)){
-        // Giáp giảm sát thương: armor 200 = giảm 50% | armor 100 = giảm 25%
-        // Công thức: dmgActual = dmg * (1 - armor/400)
         const armorReduce = (pl.armor||0) / 400;
-        const rawDmg = b.dmg;
-        const dmg = Math.max(1, Math.round(rawDmg * (1 - armorReduce)));
-        // Hiệu ứng màu theo có giáp không
+        const dmg = Math.max(1, Math.round(b.dmg * (1 - armorReduce)));
         const armorHit = pl.armor > 0;
-        pl.hp=Math.max(0,pl.hp-dmg);
         const isCrit = b.isCannon && b.pw>0.15;
+        // Chỉ tính damage nếu đây là đạn của mình (tránh double-count online)
+        if (!isOnline || (b.ownerId === myId && !b._remote)) {
+          pl.hp = Math.max(0, pl.hp - dmg);
+          if (isOnline) sendHitEvent(pl.id, dmg, pl.hp);
+        }
         spawnFX(b.x,b.y, armorHit ? '#fb923c' : '#ff3333');
         spawnDmg(b.x, b.y-10, dmg, isCrit, armorHit);
         bullets.splice(i,1);hit=true;checkWin();break;
@@ -5713,9 +5774,39 @@ function drawBars(p){
 // UTILS
 // ══════════════════════════════════════════
 function rHit(ax,ay,aw,ah,bx,by,bw,bh){return ax<bx+bw&&ax+aw>bx&&ay<by+bh&&ay+ah>by;}
+
 function syncOpp(d){
   const op=players.find(p=>p.id===d.playerId);
-  if(op){op.x=d.x;op.y=d.y;op.hp=d.hp;op.mag=d.mag;op.ammo=d.ammo;op.reloading=d.reloading;}
+  if(!op) return;
+  // Dùng _tx/_ty để nội suy mượt trong update()
+  op._tx = d.x; op._ty = d.y;
+  op.hp = d.hp;
+  op.mag = d.mag; op.ammo = d.ammo;
+  op.reloading = d.reloading;
+  if(d.aimAngle !== undefined) op.aimAngle = d.aimAngle;
+  if(d.armor !== undefined) op.armor = d.armor;
+}
+
+function syncBullet(d){
+  // Thêm đạn của đối thủ vào local để render (không tính damage — damage do shooter gửi hit_event)
+  bullets.push({
+    x: d.x, y: d.y,
+    vx: d.vx, vy: d.vy,
+    ownerId: d.playerId,
+    dmg: d.dmg, pw: d.pw, sz: d.sz,
+    isCannon: d.isCannon,
+    _remote: true, // đánh dấu đạn từ xa — không tính damage local
+  });
+}
+
+function syncHit(d){
+  // Nhận hit_event từ shooter → cập nhật HP chính xác
+  const target = players.find(p => p.id === d.targetId);
+  if(!target) return;
+  target.hp = Math.max(0, d.newHp);
+  spawnFX(target.x + TS/2, target.y + TS/2, '#ff3333');
+  spawnDmg(target.x + TS/2, target.y - 10, d.dmg, false, false);
+  checkWin();
 }
 
 window.addEventListener('load',()=>{
