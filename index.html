@@ -2568,6 +2568,7 @@ const GUNS = [
 ];
 
 let selChar='warrior', selGun='smg';
+let oppUsername = '???'; // Tên đối thủ online
 const gc = (id)=>CHARS.find(c=>c.id===id);
 const gg = (id)=>GUNS.find(g=>g.id===id);
 
@@ -2946,8 +2947,8 @@ function onAuthSuccess(data) {
   // Ẩn auth + connecting screen
   const authEl = document.getElementById('auth-screen');
   const connEl = document.getElementById('connecting-screen');
-  if (authEl)  authEl.classList.add('hidden');
-  if (connEl)  connEl.classList.remove('show');
+  if (authEl) authEl.classList.add('hidden');
+  if (connEl) connEl.classList.remove('show');
 
   // KHÔNG redirect nếu đang trong game hoặc ở màn hình gameplay
   if (typeof running !== 'undefined' && running) return;
@@ -2958,6 +2959,8 @@ function onAuthSuccess(data) {
 
   goMenu();
 }
+
+// ── Hiện badge
 
 // ── Hiện badge user ở menu ────────────────────────────────────
 function updateUserBadge() {
@@ -2982,7 +2985,6 @@ function showAuthScreen() {
   if (gw && gw.style.display === 'flex') return;
   const gameScreens = ['char-screen','campaign-screen','practice-screen','online-screen'];
   if (gameScreens.some(id => !document.getElementById(id)?.classList.contains('hidden'))) return;
-
   ['menu-screen','char-screen','campaign-screen','practice-screen',
    'online-screen','shop-screen','victory-screen'].forEach(id => {
     const el = document.getElementById(id);
@@ -2991,7 +2993,6 @@ function showAuthScreen() {
   if (gw) gw.style.display = 'none';
   document.getElementById('auth-screen').classList.remove('hidden');
 }
-
 // ── Sync campaign lên server ──────────────────────────────────
 const _origCampSave = campSave;
 campSave = function() {
@@ -3104,7 +3105,7 @@ async function tryAutoLogin() {
     if (r.shopData) coinLoad(r.shopData); else coinLoad(null);
   });
   updateUserBadge();
-  // Chỉ vào menu nếu không có màn hình nào đang chạy
+  // Chỉ vào menu nếu không có màn hình gameplay nào đang mở
   const _gs = ['char-screen','campaign-screen','practice-screen','online-screen'];
   if (!running && !_gs.some(id => !document.getElementById(id)?.classList.contains('hidden'))) {
     goMenu();
@@ -4125,9 +4126,10 @@ function handleMsg(d){
       break;
     case 'player_joined':
       // đối thủ vào phòng tôi đang tạo
+      oppUsername = d.opponent || '???';
       document.getElementById('cr-opp-slot').className='ob-slot joined';
       document.getElementById('cr-opp-slot').querySelector('.ob-slot-ava').innerText='🎮';
-      document.getElementById('cr-opp-name').innerText='ĐỐI THỦ';
+      document.getElementById('cr-opp-name').innerText = d.opponent || 'ĐỐI THỦ';
       document.getElementById('cr-opp-st').innerText='✓ Đã vào';
       setWaitTxt('cr-wait-txt','Đối thủ đã vào! Nhấn Bắt Đầu.');
       document.getElementById('btn-start-room').style.display='';
@@ -4155,12 +4157,16 @@ function handleMsg(d){
       break;
     case 'room_joined':
       myId=2; roomId=d.roomId;
+      _onlineOppName = d.opponent || '???';
+      oppUsername = d.opponent || '???';
       document.getElementById('jr-step1').style.display='none';
       document.getElementById('jr-step2').style.display='';
       document.getElementById('jr-code').innerText=d.roomId;
       break;
     case 'match_found': // quick match
       myId=d.playerId; roomId=d.roomId;
+      _onlineOppName = d.opponent || '???';
+      oppUsername = d.opponent || '???';
       const oppSlot=document.getElementById('qm-opp-slot');
       oppSlot.className='ob-slot joined';
       oppSlot.querySelector('.ob-slot-ava').innerText='🎮';
@@ -4240,6 +4246,7 @@ function doQuickMatch(){
 
 // ── Create Room ──
 function doCreateRoom(){
+  myId=1; // host luôn là player 1
   if(!wsReady){connectWS(doCreateRoom);return;}
   document.getElementById('btn-create').disabled=true;
   ws.send(JSON.stringify({type:'create_room'}));
@@ -4363,10 +4370,54 @@ function startGame(init=null){
   document.getElementById('ping').style.display=isOnline?'block':'none';
 
   if(init){
-    const def=gg('rifle'),dc=gc('warrior');
-    players=init.players.map(p=>({...p,dirX:0,dirY:0,cd:0,reloading:false,rlTimer:0,
-      gun:gg(p.gunId)||def,maxHp:p.hp,armor:0,bMult:1,speed:2,body:'warrior'}));
+    // Online: build player của MÌNH từ selChar/selGun (có đủ stats + shop bonus)
+    // Build player đối thủ từ data server (vị trí, HP mặc định)
+    players = init.players.map(p => {
+      if(p.id === myId){
+        // Tạo player đầy đủ từ char/gun đã chọn
+        const pl = mkPlayer(p.id, p.x, p.y, selChar, selGun);
+        return pl;
+      } else {
+        // Đối thủ: dùng data server, gun mặc định smg
+        const def = gg('smg');
+        const ch  = gc('warrior');
+        const oppGun = gg(p.gunId) || def;
+        return {
+          ...p,
+          dirX:0, dirY:0, cd:0, reloading:false, rlTimer:0,
+          gun: {...oppGun},
+          mag: oppGun.magSize,
+          ammo: oppGun.reserve,
+          maxHp: p.hp,
+          armor: 0, bMult: 1, speed: 2,
+          body: 'warrior', charId: 'warrior',
+          aimAngle: 0, color: ch.color, avatar: ch.avatar,
+        };
+      }
+    });
     obs=init.obstacles; items=init.items||[];
+
+    // Set HUD cho online
+    const myPl = players.find(p=>p.id===myId);
+    const opPl = players.find(p=>p.id!==myId);
+    const myChData = gc(selChar);
+    const myGnData = gg(selGun);
+
+    // Nếu mình là player 1 → hiện ở p1, đối thủ ở p2
+    const mySlot  = myId===1 ? '1' : '2';
+    const oppSlot = myId===1 ? '2' : '1';
+
+    document.getElementById(`p${mySlot}-name`).innerText  = currentUser?.username || 'BẠN';
+    document.getElementById(`p${oppSlot}-name`).innerText = oppUsername || 'ĐỐI THỦ';
+    document.getElementById(`p${mySlot}-gun`).innerText   = myGnData.name;
+    document.getElementById(`p${oppSlot}-gun`).innerText  = '???';
+    const _mc = document.getElementById(`p${mySlot}-class`);  if(_mc) _mc.innerText = myChData.name;
+    const _oc = document.getElementById(`p${oppSlot}-class`); if(_oc) _oc.innerText = '?';
+    const _mm = document.getElementById(`p${mySlot}-maxhp`);  if(_mm) _mm.innerText = myPl.maxHp;
+    const _om = document.getElementById(`p${oppSlot}-maxhp`); if(_om) _om.innerText = opPl?.maxHp || 70;
+    const _ma = document.getElementById(`p${mySlot}-avatar`);  if(_ma) _ma.innerText = myChData.avatar;
+    const _oa = document.getElementById(`p${oppSlot}-avatar`); if(_oa) _oa.innerText = '🎮';
+
   } else {
     const pCh=gc(selChar),pGun=gg(selGun),aCh=gc(aiCh),aGun=gg(aiGn);
     players=[mkPlayer(1,80,80,selChar,selGun),mkPlayer(2,970,540,aiCh,aiGn)];
@@ -5775,7 +5826,10 @@ function drawBars(p){
 function rHit(ax,ay,aw,ah,bx,by,bw,bh){return ax<bx+bw&&ax+aw>bx&&ay<by+bh&&ay+ah>by;}
 
 function syncOpp(d){
-  const op=players.find(p=>p.id===d.playerId);
+  // opponent_update.playerId = id của người GỬI (đối thủ)
+  // Tìm player có id đó (không phải mình)
+  const senderId = d.playerId;
+  const op = players.find(p => p.id === senderId && p.id !== myId);
   if(!op) return;
   // Dùng _tx/_ty để nội suy mượt trong update()
   op._tx = d.x; op._ty = d.y;
@@ -5787,14 +5841,16 @@ function syncOpp(d){
 }
 
 function syncBullet(d){
-  // Thêm đạn của đối thủ vào local để render (không tính damage — damage do shooter gửi hit_event)
+  // Thêm đạn của đối thủ vào local để render
+  // ownerId = người GỬI = đối thủ của mình
+  if(!running) return;
   bullets.push({
     x: d.x, y: d.y,
     vx: d.vx, vy: d.vy,
-    ownerId: d.playerId,
-    dmg: d.dmg, pw: d.pw, sz: d.sz,
-    isCannon: d.isCannon,
-    _remote: true, // đánh dấu đạn từ xa — không tính damage local
+    ownerId: d.playerId, // đây là id đối thủ
+    dmg: d.dmg, pw: d.pw || 0, sz: d.sz || 3,
+    isCannon: d.isCannon || false,
+    _remote: true, // không tính damage local, chờ hit_event
   });
 }
 
