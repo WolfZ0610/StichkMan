@@ -2914,10 +2914,20 @@ function onAuthSuccess(data) {
   }
 
   updateUserBadge();
-  // Chỉ goMenu nếu đang ở auth screen
+  // Chỉ goMenu nếu đang ở auth screen, không làm gián đoạn game/char-select/practice/campaign
   const authEl = document.getElementById('auth-screen');
-  if (authEl && !authEl.classList.contains('hidden')) {
+  const isOnAuthScreen = authEl && !authEl.classList.contains('hidden');
+  const gameActive = (typeof running !== 'undefined' && running)
+    || (document.getElementById('game-wrapper')?.style.display === 'flex');
+  const onOtherScreen = ['char-screen','campaign-screen','practice-screen','online-screen','shop-screen']
+    .some(id => !document.getElementById(id)?.classList.contains('hidden'));
+
+  if (isOnAuthScreen && !gameActive && !onOtherScreen) {
+    authEl.classList.add('hidden');
     goMenu();
+  } else if (isOnAuthScreen && !gameActive) {
+    // Đang ở màn hình khác (char select, practice...) → chỉ ẩn auth, không redirect
+    authEl.classList.add('hidden');
   }
 }
 
@@ -2981,19 +2991,20 @@ let _authInitDone = false; // flag: đã xử lý auto-login xong chưa
 async function tryAutoLogin() {
   const token = localStorage.getItem('sa_token');
   if (!token) {
+    // Không có token → hiện auth screen
     document.getElementById('auth-screen').classList.remove('hidden');
     return;
   }
 
-  // Có token → hiện auth screen + loading trong lúc chờ server (Render cold start chậm)
+  // Có token → hiện auth screen với trạng thái loading (chờ server xác nhận)
   document.getElementById('auth-screen').classList.remove('hidden');
   const loginBtn = document.getElementById('login-btn');
-  if (loginBtn) { loginBtn.disabled = true; loginBtn.textContent = '⏳ Đang kết nối...'; }
+  if (loginBtn) { loginBtn.disabled = true; loginBtn.textContent = '⏳ Đang kết nối server...'; }
 
   let data, status;
   try {
     const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 15000);
+    const tid = setTimeout(() => controller.abort(), 30000); // 30s cho Render cold start
     const r = await fetch(API_BASE + '/api/me', {
       headers: { 'Authorization': 'Bearer ' + token },
       signal: controller.signal
@@ -3002,22 +3013,32 @@ async function tryAutoLogin() {
     status = r.status;
     data = await r.json();
   } catch {
-    // Lỗi mạng hoặc timeout → KHÔNG xóa token, để user tự đăng nhập
+    // Lỗi mạng / timeout → KHÔNG xóa token, giữ auth screen để user đăng nhập thủ công
     if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = 'ĐĂNG NHẬP'; }
+    setAuthMsg('login-msg', '⚠ Server đang khởi động, vui lòng đăng nhập lại', true);
     return;
   }
 
   if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = 'ĐĂNG NHẬP'; }
 
-  // Chỉ xóa token nếu server xác nhận rõ ràng là Unauthorized
-  if (status === 401) { localStorage.removeItem('sa_token'); return; }
-
-  if (typeof running !== 'undefined' && running) return;
-  const gw = document.getElementById('game-wrapper');
-  if (gw && gw.style.display === 'flex') return;
+  // Chỉ xóa token nếu server xác nhận rõ ràng là Unauthorized (401)
+  if (status === 401) {
+    localStorage.removeItem('sa_token');
+    setAuthMsg('login-msg', 'Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', true);
+    return;
+  }
 
   if (!data || !data.username) return;
-  onAuthSuccess({ ...data, token });
+
+  // Đăng nhập thành công — ẩn auth, vào menu
+  document.getElementById('auth-screen').classList.add('hidden');
+  currentUser = { username: data.username, token, stats: data.stats };
+  if (data.campProgress) campProgress = data.campProgress;
+  apiCall('GET', '/api/shop', null, token).then(r => {
+    if (r.shopData) coinLoad(r.shopData); else coinLoad(null);
+  });
+  updateUserBadge();
+  goMenu();
 }
 
 // Enter key support
@@ -3915,6 +3936,7 @@ function quitToMenu(){
 // Dọn state game khi thoát/restart
 function _pauseCleanup(){
   paused=false; running=false;
+  if(_itemSpawnInterval){clearInterval(_itemSpawnInterval);_itemSpawnInterval=null;}
   document.getElementById('pause-overlay').classList.remove('show');
   document.getElementById('pause-hud-btn').innerHTML='⏸ PAUSE <span style="opacity:.5;font-size:.5rem">[ESC]</span>';
   document.getElementById('game-wrapper').style.display='none';
@@ -4192,6 +4214,7 @@ const ctx=canvas.getContext('2d');
 const W=1100,H=650,TS=40;
 
 let running=false;
+let _itemSpawnInterval=null;
 let mDown=false,mT0=0,mX=0,mY=0,charge=0;
 const MAX_CH=2000;
 
@@ -4262,7 +4285,8 @@ function startGame(init=null){
     aib.style.display=isOnline?'none':'block';
   }
   bullets=[];effects=[];dmgNumbers=[];running=true;paused=false;gameLoop();
-  if(!isOnline) setInterval(()=>{if(running)spawnItem(Math.random()>.5?'HP':'AMMO');},7000);
+  if(_itemSpawnInterval){clearInterval(_itemSpawnInterval);_itemSpawnInterval=null;}
+  if(!isOnline) _itemSpawnInterval=setInterval(()=>{if(running)spawnItem(Math.random()>.5?'HP':'AMMO');},7000);
 }
 
 // ══════════════════════════════════════════
