@@ -1,316 +1,315 @@
-const express = require('express');
-const http = require('http');
-const WebSocket = require('ws');
-const path = require('path');
+/**
+ * ╔══════════════════════════════════════════════════════╗
+ * ║   STICKMAN ARENA — Server v2 (Auth + WebSocket)     ║
+ * ╚══════════════════════════════════════════════════════╝
+ */
+const { WebSocketServer, WebSocket } = require('ws');
+const http   = require('http');
+const fs     = require('fs');
+const path   = require('path');
+const crypto = require('crypto');
 
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const PORT       = process.env.PORT || 3000;
+const USERS_FILE = path.join(__dirname, 'users.json');
+const SECRET     = process.env.JWT_SECRET || 'stickman_arena_2025_secret';
 
-// Serve static files
-app.use(express.static(__dirname));
-
-// Game rooms management
-const rooms = new Map();
-const waitingPlayers = [];
-
-class GameRoom {
-    constructor(id) {
-        this.id = id;
-        this.players = [];
-        this.gameState = {
-            players: [],
-            bullets: [],
-            items: [],
-            obstacles: []
-        };
-        this.started = false;
-    }
-
-    addPlayer(client) {
-        if (this.players.length >= 2) return false;
-        
-        const playerId = this.players.length + 1;
-        this.players.push({
-            client: client,
-            id: playerId,
-            ready: false
-        });
-
-        client.roomId = this.id;
-        client.playerId = playerId;
-
-        return true;
-    }
-
-    broadcast(message, exceptClient = null) {
-        this.players.forEach(p => {
-            if (p.client !== exceptClient && p.client.readyState === WebSocket.OPEN) {
-                p.client.send(JSON.stringify(message));
-            }
-        });
-    }
-
-    removePlayer(client) {
-        this.players = this.players.filter(p => p.client !== client);
-        
-        // Notify other player
-        this.broadcast({
-            type: 'player_left',
-            message: 'Đối thủ đã rời phòng'
-        });
-
-        return this.players.length === 0;
-    }
-
-    startGame() {
-        if (this.players.length !== 2) return;
-        
-        this.started = true;
-        
-        // Initialize game state
-        this.gameState = {
-            players: [
-                { id: 1, x: 50, y: 50, color: '#4facfe', hp: 5, mag: 10, ammo: 30, dirX: 0, dirY: 0 },
-                { id: 2, x: 700, y: 500, color: '#ff0844', hp: 5, mag: 10, ammo: 30, dirX: 0, dirY: 0 }
-            ],
-            bullets: [],
-            items: [],
-            obstacles: this.generateObstacles()
-        };
-
-        // Send start signal to both players
-        this.players.forEach((p, index) => {
-            p.client.send(JSON.stringify({
-                type: 'game_start',
-                playerId: p.id,
-                gameState: this.gameState
-            }));
-        });
-
-        // Spawn initial items
-        this.spawnItem('HP');
-        this.spawnItem('AMMO');
-        this.spawnItem('AMMO');
-    }
-
-    generateObstacles() {
-        const obstacles = [];
-        for (let i = 0; i < 8; i++) {
-            obstacles.push({
-                x: 100 + Math.random() * 600,
-                y: 100 + Math.random() * 400,
-                w: 60, 
-                h: 60
-            });
-        }
-        return obstacles;
-    }
-
-    spawnItem(type) {
-        const item = {
-            type: type,
-            x: 50 + Math.random() * 700,
-            y: 50 + Math.random() * 500,
-            size: 20,
-            id: Date.now() + Math.random()
-        };
-        this.gameState.items.push(item);
-        
-        this.broadcast({
-            type: 'item_spawn',
-            item: item
-        });
-    }
+// ── User DB (flat JSON file, không cần DB) ────────────
+function loadUsers() {
+  try { if (fs.existsSync(USERS_FILE)) return JSON.parse(fs.readFileSync(USERS_FILE,'utf8')); }
+  catch {}
+  return {};
+}
+function saveUsers(db) {
+  fs.writeFileSync(USERS_FILE, JSON.stringify(db, null, 2));
 }
 
-// WebSocket connection handling
-wss.on('connection', (ws) => {
-    console.log('New client connected');
+// ── Crypto ────────────────────────────────────────────
+function hashPw(pw) {
+  return crypto.createHmac('sha256', SECRET).update(pw).digest('hex');
+}
+// Minimal JWT (no lib needed)
+function signToken(payload) {
+  const h = Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url');
+  const b = Buffer.from(JSON.stringify({...payload, iat:Date.now()})).toString('base64url');
+  const s = crypto.createHmac('sha256',SECRET).update(`${h}.${b}`).digest('base64url');
+  return `${h}.${b}.${s}`;
+}
+function verifyToken(token) {
+  try {
+    const [h,b,s] = (token||'').split('.');
+    if (!h||!b||!s) return null;
+    const expected = crypto.createHmac('sha256',SECRET).update(`${h}.${b}`).digest('base64url');
+    if (s !== expected) return null;
+    const p = JSON.parse(Buffer.from(b,'base64url').toString());
+    if (Date.now()-p.iat > 30*24*60*60*1000) return null; // 30 ngày
+    return p;
+  } catch { return null; }
+}
 
-    ws.on('message', (message) => {
-        try {
-            const data = JSON.parse(message);
+// ── HTTP utils ────────────────────────────────────────
+function parseBody(req) {
+  return new Promise(res => {
+    let d='';
+    req.on('data',c=>{d+=c;if(d.length>1e4)d='';});
+    req.on('end',()=>{try{res(JSON.parse(d));}catch{res({});}});
+  });
+}
+function json(res, code, obj) {
+  res.writeHead(code,{'Content-Type':'application/json','Access-Control-Allow-Origin':'*'});
+  res.end(JSON.stringify(obj));
+}
+function getToken(req) {
+  return (req.headers.authorization||'').replace('Bearer ','');
+}
 
-            switch (data.type) {
-                case 'find_match':
-                    handleFindMatch(ws, data);
-                    break;
+// ── HTTP Server ───────────────────────────────────────
+const httpServer = http.createServer(async (req,res) => {
+  const url = req.url.split('?')[0];
 
-                case 'player_update':
-                    handlePlayerUpdate(ws, data);
-                    break;
+  if (req.method==='OPTIONS') {
+    res.writeHead(204,{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Content-Type,Authorization'});
+    return res.end();
+  }
 
-                case 'shoot':
-                    handleShoot(ws, data);
-                    break;
-
-                case 'reload':
-                    handleReload(ws, data);
-                    break;
-
-                case 'item_collect':
-                    handleItemCollect(ws, data);
-                    break;
-
-                case 'player_hit':
-                    handlePlayerHit(ws, data);
-                    break;
-            }
-        } catch (error) {
-            console.error('Error handling message:', error);
-        }
+  // Serve game
+  if (req.method==='GET' && (url==='/'||url==='/index.html')) {
+    fs.readFile(path.join(__dirname,'index.html'),(err,data)=>{
+      if(err){res.writeHead(404);return res.end('Not found');}
+      res.writeHead(200,{'Content-Type':'text/html;charset=utf-8'});
+      res.end(data);
     });
+    return;
+  }
 
-    ws.on('close', () => {
-        console.log('Client disconnected');
-        handleDisconnect(ws);
-    });
+  // POST /api/register
+  if (req.method==='POST' && url==='/api/register') {
+    const {username, password} = await parseBody(req);
+    if (!username||!password) return json(res,400,{error:'Thiếu tên đăng nhập hoặc mật khẩu'});
+    if (username.length<3||username.length>20) return json(res,400,{error:'Tên đăng nhập 3–20 ký tự'});
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) return json(res,400,{error:'Chỉ dùng chữ, số, dấu gạch dưới'});
+    if (password.length<6) return json(res,400,{error:'Mật khẩu tối thiểu 6 ký tự'});
+
+    const db = loadUsers();
+    const key = username.toLowerCase();
+    if (db[key]) return json(res,409,{error:'Tên đăng nhập đã tồn tại'});
+
+    db[key] = { username, password:hashPw(password), createdAt:Date.now(),
+                campProgress:{cleared:[]}, stats:{wins:0,losses:0} };
+    saveUsers(db);
+    const token = signToken({username});
+    console.log(`[REGISTER] ${username}`);
+    return json(res,201,{token, username, campProgress:db[key].campProgress, stats:db[key].stats});
+  }
+
+  // POST /api/login
+  if (req.method==='POST' && url==='/api/login') {
+    const {username, password} = await parseBody(req);
+    if (!username||!password) return json(res,400,{error:'Thiếu thông tin'});
+    const db = loadUsers();
+    const user = db[username.toLowerCase()];
+    if (!user||user.password!==hashPw(password)) return json(res,401,{error:'Sai tên đăng nhập hoặc mật khẩu'});
+    const token = signToken({username:user.username});
+    console.log(`[LOGIN] ${user.username}`);
+    return json(res,200,{token, username:user.username, campProgress:user.campProgress, stats:user.stats});
+  }
+
+  // GET /api/me
+  if (req.method==='GET' && url==='/api/me') {
+    const p = verifyToken(getToken(req));
+    if (!p) return json(res,401,{error:'Unauthorized'});
+    const db = loadUsers();
+    const user = db[p.username.toLowerCase()];
+    if (!user) return json(res,404,{error:'User not found'});
+    return json(res,200,{username:user.username, campProgress:user.campProgress, stats:user.stats});
+  }
+
+  // POST /api/progress  — sync campaign
+  if (req.method==='POST' && url==='/api/progress') {
+    const p = verifyToken(getToken(req));
+    if (!p) return json(res,401,{error:'Unauthorized'});
+    const {campProgress} = await parseBody(req);
+    const db = loadUsers();
+    const user = db[p.username.toLowerCase()];
+    if (!user) return json(res,404,{error:'User not found'});
+    user.campProgress = campProgress;
+    saveUsers(db);
+    return json(res,200,{ok:true});
+  }
+
+  // POST /api/stats  — ghi kết quả trận
+  if (req.method==='POST' && url==='/api/stats') {
+    const p = verifyToken(getToken(req));
+    if (!p) return json(res,401,{error:'Unauthorized'});
+    const {result} = await parseBody(req); // 'win' | 'loss'
+    const db = loadUsers();
+    const user = db[p.username.toLowerCase()];
+    if (!user) return json(res,404,{error:'User not found'});
+    if (result==='win')  user.stats.wins++;
+    if (result==='loss') user.stats.losses++;
+    saveUsers(db);
+    return json(res,200,{ok:true, stats:user.stats});
+  }
+
+  // POST /api/shop — lưu coin + owned items
+  if (req.method==='POST' && url==='/api/shop') {
+    const p = verifyToken(getToken(req));
+    if (!p) return json(res,401,{error:'Unauthorized'});
+    const {shopData} = await parseBody(req);
+    const db = loadUsers();
+    const user = db[p.username.toLowerCase()];
+    if (!user) return json(res,404,{error:'User not found'});
+    user.shopData = shopData;
+    saveUsers(db);
+    return json(res,200,{ok:true});
+  }
+
+  // GET /api/shop
+  if (req.method==='GET' && url==='/api/shop') {
+    const p = verifyToken(getToken(req));
+    if (!p) return json(res,401,{error:'Unauthorized'});
+    const db = loadUsers();
+    const user = db[p.username.toLowerCase()];
+    if (!user) return json(res,404,{error:'User not found'});
+    return json(res,200,{shopData: user.shopData || null});
+  }
+
+  json(res,404,{error:'Not found'});
 });
 
-function handleFindMatch(ws, data) {
-    // Try to find existing waiting player
-    if (waitingPlayers.length > 0) {
-        const opponent = waitingPlayers.shift();
-        
-        // Create new room
-        const roomId = `room_${Date.now()}`;
-        const room = new GameRoom(roomId);
-        rooms.set(roomId, room);
+// ── WebSocket ─────────────────────────────────────────
+const wss = new WebSocketServer({server:httpServer});
+const queue=[], rooms=new Map();
 
-        room.addPlayer(opponent);
-        room.addPlayer(ws);
-
-        // Notify both players
-        opponent.send(JSON.stringify({
-            type: 'match_found',
-            roomId: roomId,
-            playerId: 1
-        }));
-
-        ws.send(JSON.stringify({
-            type: 'match_found',
-            roomId: roomId,
-            playerId: 2
-        }));
-
-        // Start game after 2 seconds
-        setTimeout(() => {
-            room.startGame();
-        }, 2000);
-
-    } else {
-        // Add to waiting list
-        waitingPlayers.push(ws);
-        ws.send(JSON.stringify({
-            type: 'waiting',
-            message: 'Đang tìm đối thủ...'
-        }));
-    }
+function genRoomId(){
+  const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let id;
+  do{id=Array.from({length:4},()=>c[Math.floor(Math.random()*c.length)]).join('');}
+  while(rooms.has(id));
+  return id;
+}
+function send(ws,obj){if(ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(obj));}
+function makeGameState(){
+  return {
+    players:[{id:1,x:80,y:80,hp:70,gunId:'smg'},{id:2,x:970,y:540,hp:70,gunId:'smg'}],
+    obstacles:[
+      {x:525,y:280,w:50,h:90},{x:200,y:180,w:70,h:70},{x:160,y:380,w:55,h:55},
+      {x:320,y:290,w:45,h:80},{x:830,y:180,w:70,h:70},{x:880,y:400,w:55,h:55},
+      {x:730,y:290,w:45,h:80},{x:430,y:100,w:80,h:45},{x:590,y:100,w:80,h:45},
+      {x:430,y:510,w:80,h:45},{x:590,y:510,w:80,h:45},{x:310,y:130,w:45,h:45},
+      {x:745,y:480,w:45,h:45},{x:310,y:470,w:45,h:45},{x:745,y:130,w:45,h:45}
+    ],
+    items:[]
+  };
 }
 
-function handlePlayerUpdate(ws, data) {
-    const room = rooms.get(ws.roomId);
-    if (!room) return;
+wss.on('connection',(ws)=>{
+  ws.id=Math.random().toString(36).slice(2,9);
+  ws.roomId=null; ws.role=null; ws.isAlive=true; ws.username=null;
+  ws.on('pong',()=>{ws.isAlive=true;});
+  ws.on('message',(raw)=>{let m;try{m=JSON.parse(raw);}catch{return;}handleMsg(ws,m);});
+  ws.on('close',()=>handleDisconnect(ws));
+  ws.on('error',()=>{});
+});
 
-    // Broadcast to other player
-    room.broadcast({
-        type: 'opponent_update',
-        playerId: data.playerId,
-        x: data.x,
-        y: data.y,
-        dirX: data.dirX,
-        dirY: data.dirY,
-        hp: data.hp,
-        mag: data.mag,
-        ammo: data.ammo,
-        reloading: data.reloading
-    }, ws);
-}
+function handleMsg(ws,msg){
+  switch(msg.type){
+    case 'ping': send(ws,{type:'pong'}); break;
 
-function handleShoot(ws, data) {
-    const room = rooms.get(ws.roomId);
-    if (!room) return;
-
-    room.broadcast({
-        type: 'opponent_shoot',
-        bullet: data.bullet
-    }, ws);
-}
-
-function handleReload(ws, data) {
-    const room = rooms.get(ws.roomId);
-    if (!room) return;
-
-    room.broadcast({
-        type: 'opponent_reload',
-        playerId: data.playerId
-    }, ws);
-}
-
-function handleItemCollect(ws, data) {
-    const room = rooms.get(ws.roomId);
-    if (!room) return;
-
-    // Remove item from game state
-    room.gameState.items = room.gameState.items.filter(i => i.id !== data.itemId);
-
-    room.broadcast({
-        type: 'item_collected',
-        itemId: data.itemId,
-        playerId: data.playerId
-    }, ws);
-}
-
-function handlePlayerHit(ws, data) {
-    const room = rooms.get(ws.roomId);
-    if (!room) return;
-
-    room.broadcast({
-        type: 'player_damaged',
-        playerId: data.targetId,
-        hp: data.hp
-    }, ws);
-
-    // Check for game over
-    if (data.hp <= 0) {
-        room.broadcast({
-            type: 'game_over',
-            winnerId: data.playerId
-        });
-    }
-}
-
-function handleDisconnect(ws) {
-    // Remove from waiting list
-    const waitingIndex = waitingPlayers.indexOf(ws);
-    if (waitingIndex > -1) {
-        waitingPlayers.splice(waitingIndex, 1);
+    case 'auth': {
+      const p=verifyToken(msg.token||'');
+      if(p){ws.username=p.username;send(ws,{type:'auth_ok',username:p.username});}
+      else send(ws,{type:'auth_fail'});
+      break;
     }
 
-    // Remove from room
-    if (ws.roomId) {
-        const room = rooms.get(ws.roomId);
-        if (room) {
-            const isEmpty = room.removePlayer(ws);
-            if (isEmpty) {
-                rooms.delete(ws.roomId);
-            }
-        }
+    case 'find_match':{
+      if(!queue.includes(ws))queue.push(ws);
+      if(queue.length>=2){
+        const p1=queue.shift(),p2=queue.shift();
+        const rid=genRoomId();
+        rooms.set(rid,{host:p1,guest:p2,started:true});
+        p1.roomId=p2.roomId=rid; p1.role='host'; p2.role='guest';
+        send(p1,{type:'match_found',playerId:1,roomId:rid,opponent:p2.username||'???'});
+        send(p2,{type:'match_found',playerId:2,roomId:rid,opponent:p1.username||'???'});
+        setTimeout(()=>{const gs=makeGameState();send(p1,{type:'game_start',gameState:gs});send(p2,{type:'game_start',gameState:gs});},800);
+      }
+      break;
     }
+    case 'create_room':{
+      if(ws.roomId)cleanupRoom(ws.roomId,ws);
+      const rid=genRoomId();
+      rooms.set(rid,{host:ws,guest:null,started:false});
+      ws.roomId=rid;ws.role='host';
+      send(ws,{type:'room_created',roomId:rid});
+      break;
+    }
+    case 'join_room':{
+      const rid=(msg.roomId||'').toUpperCase().trim();
+      const room=rooms.get(rid);
+      if(!room)return send(ws,{type:'room_not_found',roomId:rid});
+      if(room.guest||room.started)return send(ws,{type:'room_full'});
+      room.guest=ws;ws.roomId=rid;ws.role='guest';
+      send(ws,{type:'room_joined',roomId:rid});
+      send(room.host,{type:'player_joined',roomId:rid,opponent:ws.username||'???'});
+      break;
+    }
+    case 'start_room':{
+      const rid=msg.roomId||ws.roomId;const room=rooms.get(rid);
+      if(!room||room.host!==ws||!room.guest)return;
+      room.started=true;
+      send(room.host,{type:'match_found',playerId:1,roomId:rid,opponent:room.guest.username||'???'});
+      send(room.guest,{type:'match_found',playerId:2,roomId:rid,opponent:room.host.username||'???'});
+      setTimeout(()=>{const gs=makeGameState();send(room.host,{type:'game_start',gameState:gs});send(room.guest,{type:'game_start',gameState:gs});},800);
+      break;
+    }
+    case 'cancel_room':{
+      const rid=msg.roomId||ws.roomId;const room=rooms.get(rid);
+      if(!room)return;
+      if(room.guest)send(room.guest,{type:'player_left'});
+      rooms.delete(rid);ws.roomId=null;break;
+    }
+    case 'leave_room':{
+      const rid=msg.roomId||ws.roomId;const room=rooms.get(rid);
+      if(!room||room.guest!==ws)return;
+      room.guest=null;ws.roomId=null;send(room.host,{type:'player_left_room'});break;
+    }
+    case 'cancel':{
+      const qi=queue.indexOf(ws);if(qi!==-1)queue.splice(qi,1);
+      if(ws.roomId)cleanupRoom(ws.roomId,ws);break;
+    }
+    case 'player_update':{
+      const room=rooms.get(ws.roomId);if(!room)return;
+      const other=room.host===ws?room.guest:room.host;
+      if(other)send(other,{type:'opponent_update',...msg});break;
+    }
+    case 'game_over':{
+      const room=rooms.get(ws.roomId);if(!room)return;
+      const other=room.host===ws?room.guest:room.host;
+      if(other)send(other,{type:'game_over',winnerId:msg.winnerId});
+      rooms.delete(ws.roomId);ws.roomId=null;break;
+    }
+  }
 }
 
-// Spawn items periodically
-setInterval(() => {
-    rooms.forEach(room => {
-        if (room.started && Math.random() > 0.5) {
-            room.spawnItem(Math.random() > 0.5 ? 'HP' : 'AMMO');
-        }
-    });
-}, 5000);
+function handleDisconnect(ws){
+  const qi=queue.indexOf(ws);if(qi!==-1)queue.splice(qi,1);
+  if(ws.roomId)cleanupRoom(ws.roomId,ws);
+}
+function cleanupRoom(rid,leaving){
+  const room=rooms.get(rid);if(!room)return;
+  const other=room.host===leaving?room.guest:room.host;
+  if(other?.readyState===WebSocket.OPEN){send(other,{type:'player_left'});other.roomId=null;}
+  rooms.delete(rid);leaving.roomId=null;
+}
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`🎮 Server đang chạy tại http://localhost:${PORT}`);
-    console.log(`📡 WebSocket server sẵn sàng!`);
+setInterval(()=>{wss.clients.forEach(ws=>{if(!ws.isAlive){ws.terminate();return;}ws.isAlive=false;ws.ping();});},30000);
+setInterval(()=>{for(const[rid,room]of rooms){if(room.host?.readyState!==WebSocket.OPEN&&room.guest?.readyState!==WebSocket.OPEN)rooms.delete(rid);}},60000);
+
+httpServer.listen(PORT,()=>{
+  console.log(`\n╔══════════════════════════════════════════╗`);
+  console.log(`║  STICKMAN ARENA Server v2 (Auth + WS)   ║`);
+  console.log(`║  http://localhost:${PORT}                  ║`);
+  console.log(`╚══════════════════════════════════════════╝\n`);
+  console.log('  /api/register  /api/login  /api/me');
+  console.log('  /api/progress  /api/stats\n');
 });

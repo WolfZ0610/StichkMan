@@ -1,25 +1,13 @@
 {
-  "name": "stickman-arena-online",
+  "name": "stickman-arena-server",
   "version": "1.0.0",
-  "description": "Multiplayer Stickman Shooter Game with WebSocket",
+  "description": "Stickman Arena WebSocket Game Server",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "node --watch server.js"
   },
-  "keywords": [
-    "game",
-    "multiplayer",
-    "websocket",
-    "stickman"
-  ],
-  "author": "",
-  "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "ws": "^8.14.2"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
+    "ws": "^8.18.0"
   }
 }
