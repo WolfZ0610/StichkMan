@@ -1337,6 +1337,7 @@ canvas{display:block;cursor:crosshair}
   border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
+/* FIX: connecting-screen dùng .show class nhất quán */
 #connecting-screen{display:none!important}
 #connecting-screen.show{display:flex!important}
 
@@ -2634,7 +2635,14 @@ function goCharSelect(){
   renderSelect();
 }
 function goMenu(){
-  document.getElementById('char-screen').classList.add('hidden');
+  // FIX: Ẩn TẤT CẢ screen trước — đặc biệt auth-screen đang đè menu
+  ['auth-screen','char-screen','campaign-screen','practice-screen',
+   'online-screen','shop-screen','lb-screen','connecting-screen'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.add('hidden'); el.classList.remove('show'); }
+  });
+  const gw = document.getElementById('game-wrapper');
+  if (gw) gw.style.display = 'none';
   currentPracticeConfig = null;
   document.getElementById('menu-screen').classList.remove('hidden');
 }// ══════════════════════════════════════════
