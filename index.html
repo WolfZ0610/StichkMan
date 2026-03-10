@@ -2953,8 +2953,10 @@ function onAuthSuccess(data) {
   // KHÔNG redirect nếu đang trong game hoặc ở màn hình gameplay
   if (typeof running !== 'undefined' && running) return;
   if (document.getElementById('game-wrapper')?.style.display === 'flex') return;
+  // victory-screen dùng .show chứ không dùng .hidden — kiểm tra riêng
+  if (document.getElementById('victory-screen')?.classList.contains('show')) return;
   const gameScreens = ['char-screen','campaign-screen','practice-screen',
-                       'online-screen','shop-screen','victory-screen'];
+                       'online-screen','shop-screen'];
   if (gameScreens.some(id => !document.getElementById(id)?.classList.contains('hidden'))) return;
 
   goMenu();
@@ -2986,10 +2988,13 @@ function showAuthScreen() {
   const gameScreens = ['char-screen','campaign-screen','practice-screen','online-screen'];
   if (gameScreens.some(id => !document.getElementById(id)?.classList.contains('hidden'))) return;
   ['menu-screen','char-screen','campaign-screen','practice-screen',
-   'online-screen','shop-screen','victory-screen'].forEach(id => {
+   'online-screen','shop-screen'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.add('hidden');
   });
+  // victory-screen dùng .show, không dùng .hidden
+  const _vs = document.getElementById('victory-screen');
+  if (_vs) _vs.classList.remove('show');
   if (gw) gw.style.display = 'none';
   document.getElementById('auth-screen').classList.remove('hidden');
 }
