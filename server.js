@@ -193,7 +193,7 @@ const httpServer = http.createServer(async (req,res) => {
       practice: { wins: u.stats?.practice?.wins||0, losses: u.stats?.practice?.losses||0 },
       coins:  u.shopData?.coins || 0,
     }));
-    const active = players.filter(p => p.total.wins + p.total.losses > 0);
+    const active = players; // Hiển thị tất cả người dùng đã đăng ký
     return json(res, 200, { players: active });
   }
 

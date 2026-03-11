@@ -2364,6 +2364,7 @@ canvas{display:block;cursor:crosshair}
     <div class="c-hud">
       <div class="c-vs">VS</div>
       <div id="ping">🌐 --ms</div>
+      <div id="online-match-timer" style="display:none;font-family:'Share Tech Mono',monospace;font-size:1.05rem;font-weight:700;letter-spacing:2px;color:#00d4ff;text-shadow:0 0 10px rgba(0,212,255,.6);background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.25);border-radius:6px;padding:3px 10px;margin-top:2px">⏱ 2:00</div>
       <div id="ai-badge">🤖 A*<br>HC · SA<br>Minimax</div>
       <div id="stage-hud-badge"></div>
     </div>
@@ -4071,6 +4072,9 @@ function _pauseCleanup(){
 // ONLINE LOBBY & WEBSOCKET
 // ══════════════════════════════════════════
 let ws=null, myId=null, roomId=null, isOnline=false;
+// ── Online match timer ─────────────────────────────────────
+let _onlineMatchTimeLeft = 0;   // ms còn lại
+let _onlineTimerInterval = null;
 let aiCh='warrior', aiGn='rifle';
 let wsReady=false, pingMs=0, pingT=0;
 let lobbyMode='quick'; // 'quick' | 'create' | 'join'
@@ -4222,6 +4226,8 @@ function goOnlineBack(){
   if(ws&&ws.readyState===WebSocket.OPEN&&roomId){
     ws.send(JSON.stringify({type:'cancel'}));
   }
+  if(_onlineTimerInterval){clearInterval(_onlineTimerInterval);_onlineTimerInterval=null;}
+  const _te=document.getElementById('online-match-timer');if(_te)_te.style.display='none';
   roomId=null; myId=null; isOnline=false;
   resetLobbyUI();
   document.getElementById('online-screen').classList.add('hidden');
@@ -4462,6 +4468,40 @@ function startGame(init=null){
   bullets=[];effects=[];dmgNumbers=[];running=true;paused=false;gameLoop();
   if(_itemSpawnInterval){clearInterval(_itemSpawnInterval);_itemSpawnInterval=null;}
   if(!isOnline) _itemSpawnInterval=setInterval(()=>{if(running)spawnItem(Math.random()>.5?'HP':'AMMO');},7000);
+
+  // ── Online: đếm ngược 2 phút ──────────────────────────────
+  if(_onlineTimerInterval){clearInterval(_onlineTimerInterval);_onlineTimerInterval=null;}
+  const timerEl = document.getElementById('online-match-timer');
+  if(isOnline){
+    _onlineMatchTimeLeft = 2 * 60 * 1000; // 2 phút = 120 000 ms
+    if(timerEl) timerEl.style.display = 'block';
+    _onlineTimerInterval = setInterval(()=>{
+      if(!running || paused) return;
+      _onlineMatchTimeLeft -= 200;
+      if(timerEl){
+        const s = Math.max(0, Math.ceil(_onlineMatchTimeLeft / 1000));
+        const m = Math.floor(s/60), sec = s%60;
+        timerEl.textContent = '⏱ ' + m + ':' + String(sec).padStart(2,'0');
+        // Đổi màu đỏ khi <30s
+        timerEl.style.color = s<=30 ? '#ff4444' : '#00d4ff';
+        timerEl.style.textShadow = s<=30 ? '0 0 10px rgba(255,68,68,.7)' : '0 0 10px rgba(0,212,255,.6)';
+        timerEl.style.borderColor = s<=30 ? 'rgba(255,68,68,.4)' : 'rgba(0,212,255,.25)';
+      }
+      if(_onlineMatchTimeLeft <= 0){
+        clearInterval(_onlineTimerInterval);_onlineTimerInterval=null;
+        if(!running) return;
+        // Hết giờ: ai máu hơn thắng
+        const p1=me(), p2=opp();
+        const myHp  = p1 ? p1.hp : 0;
+        const oppHp = p2 ? p2.hp : 0;
+        if(myHp > oppHp)       endGame(true);   // mình thắng
+        else if(myHp < oppHp)  endGame(false);  // mình thua
+        else                   endGame('draw');  // hòa
+      }
+    }, 200);
+  } else {
+    if(timerEl) timerEl.style.display = 'none';
+  }
 }
 
 // ══════════════════════════════════════════
@@ -4666,6 +4706,7 @@ canvas.addEventListener('mouseup',e=>{
 // RELOAD
 // ══════════════════════════════════════════
 function doReload(p){
+  if(isOnline)return; // Online: vô hạn đạn, không cần nạp
   if(p.reloading||p.mag===p.gun.magSize||p.ammo===0)return;
   p.reloading=true;p.rlTimer=p.gun.reloadMs;
 }
@@ -4700,7 +4741,9 @@ function shoot(p,tx,ty,pw){
   // Crit chance từ perk
   const isCrit = p._critChance && Math.random() < p._critChance;
   if(p.mag<=0||p.reloading||p.cd>0)return;
-  p.mag--;p.cd=p.gun.cd;
+  // Online: vô hạn đạn — không trừ mag
+  if(!isOnline) p.mag--;
+  p.cd=p.gun.cd;
   const cx=p.x+TS/2,cy=p.y+TS/2;
   const ang=Math.atan2(ty-cy,tx-cx);
   const sp=(Math.random()-.5)*p.gun.spread*2;
@@ -5174,13 +5217,14 @@ function updateHUD(){
     if(!pl) return;
     // HP — làm tròn để tránh hiện số thập phân
     document.getElementById('p'+slot+'-hp').innerText = Math.ceil(pl.hp);
-    document.getElementById('p'+slot+'-ammo').innerText = pl.ammo;
+    document.getElementById('p'+slot+'-ammo').innerText = isOnline ? '∞' : pl.ammo;
     const r = pl.hp / pl.maxHp;
     document.getElementById('p'+slot+'-hpf').style.width = (Math.max(0,r)*100)+'%';
     document.getElementById('p'+slot+'-hpf').classList.toggle('low', r < .25);
     document.getElementById('p'+slot+'-rlf').style.width =
       pl.reloading ? ((1 - pl.rlTimer/pl.gun.reloadMs)*100)+'%' : '0%';
-    pips('p'+slot+'-mag', pl.mag, pl.gun.magSize);
+    // Online: pips luôn đầy
+    pips('p'+slot+'-mag', isOnline ? pl.gun.magSize : pl.mag, pl.gun.magSize);
     const aEl = document.getElementById('p'+slot+'-armor');
     if(aEl) aEl.innerText = Math.round(pl.armor||0)+'/200';
   }
@@ -5195,6 +5239,10 @@ function checkWin(){
 }
 function endGame(playerWon){
   running=false;
+  // Dọn online timer
+  if(_onlineTimerInterval){clearInterval(_onlineTimerInterval);_onlineTimerInterval=null;}
+  const _timerEl=document.getElementById('online-match-timer');
+  if(_timerEl) _timerEl.style.display='none';
   const p1=me(),p2=opp();
   const isWin=playerWon===true;
   const isDraw=playerWon==='draw';
