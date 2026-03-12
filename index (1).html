@@ -1267,7 +1267,7 @@ canvas{display:block;cursor:crosshair}
     var(--ink);
 }
 .auth-wrap{
-  position:relative;z-index:2;
+  position:relative;z-index:5;
   display:flex;flex-direction:column;align-items:center;gap:0;
   width:100%;max-width:400px;
 }
@@ -1286,7 +1286,7 @@ canvas{display:block;cursor:crosshair}
   width:100%;background:rgba(255,255,255,.03);
   border:1px solid rgba(0,212,255,.15);
   border-radius:2px;padding:28px 32px 24px;
-  position:relative;
+  position:relative;z-index:5;
 }
 .auth-box::before{
   content:'';position:absolute;top:0;left:0;right:0;height:1px;
@@ -4666,7 +4666,6 @@ function buildMap(){
     buildMapIsland,
     buildMapFortress,
     buildMapOpen,
-    buildMapCross,
     buildMapRandom,
   ];
   const pick = layouts[Math.floor(Math.random() * layouts.length)];
@@ -4748,23 +4747,7 @@ function buildMapOpen(){
   ];
 }
 
-// Layout 6: Hình chữ thập trung tâm
-function buildMapCross(){
-  return [
-    // Thanh ngang
-    {x:280,y:295,w:180,h:40},{x:640,y:295,w:180,h:40},
-    // Thanh dọc
-    {x:520,y:120,w:60,h:150},{x:520,y:390,w:60,h:150},
-    // Góc nhỏ
-    {x:160,y:160,w:60,h:60},{x:880,y:160,w:60,h:60},
-    {x:160,y:430,w:60,h:60},{x:880,y:430,w:60,h:60},
-    // Rải rác
-    {x:350,y:160,w:45,h:45},{x:700,y:430,w:45,h:45},
-    {x:350,y:430,w:45,h:45},{x:700,y:160,w:45,h:45},
-  ];
-}
-
-// Layout 7: Hoàn toàn ngẫu nhiên (procedural)
+// Layout 6: Hoàn toàn ngẫu nhiên (procedural)
 function buildMapRandom(){
   const result = [];
   const r = ()=>Math.random();
