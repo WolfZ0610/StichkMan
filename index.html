@@ -1293,17 +1293,25 @@ canvas{display:block;cursor:crosshair}
   background:linear-gradient(90deg,transparent,var(--cyan),transparent);
   opacity:.5;
 }
-/* Tab switcher */
-.auth-tabs{display:flex;margin-bottom:24px;border-bottom:1px solid var(--bdr-dim);}
-.auth-tab{
-  flex:1;padding:10px 0;font-family:'Rajdhani',sans-serif;font-weight:600;
-  font-size:.95rem;letter-spacing:.1em;text-transform:uppercase;
-  background:none;border:none;color:var(--txt-mid);cursor:pointer;
-  border-bottom:2px solid transparent;margin-bottom:-1px;
-  transition:color .2s,border-color .2s;
+/* Form title (thay tab) */
+.auth-form-title{
+  font-family:'Black Ops One',sans-serif;
+  font-size:1.15rem;letter-spacing:.18em;
+  color:var(--cyan);margin-bottom:22px;
+  text-align:center;
+  text-shadow:0 0 18px rgba(0,212,255,.35);
 }
-.auth-tab.active{color:var(--cyan);border-bottom-color:var(--cyan);}
-.auth-tab:hover:not(.active){color:rgba(255,255,255,.6);}
+/* Switch link */
+.auth-switch{
+  margin-top:14px;text-align:center;
+  font-family:'Share Tech Mono',monospace;font-size:.7rem;
+  letter-spacing:.06em;color:var(--txt-dim);
+}
+.auth-switch a{
+  color:var(--cyan);text-decoration:none;cursor:pointer;
+  transition:opacity .15s;
+}
+.auth-switch a:hover{opacity:.75;}
 /* Form fields */
 .auth-field{margin-bottom:16px;}
 .auth-label{
@@ -1794,10 +1802,8 @@ canvas{display:block;cursor:crosshair}
     <div class="auth-logo">STICKMAN ARENA</div>
     <div class="auth-sub">⬡ &nbsp;Tactical PVP &nbsp;·&nbsp; Online &nbsp;·&nbsp; Campaign&nbsp; ⬡</div>
     <div class="auth-box">
-      <div class="auth-tabs">
-        <button class="auth-tab active" id="tab-login"  onclick="authSwitchTab('login')">Đăng Nhập</button>
-        <button class="auth-tab"        id="tab-register" onclick="authSwitchTab('register')">Đăng Ký</button>
-      </div>
+      <!-- Dynamic header thay tab -->
+      <div class="auth-form-title" id="auth-form-title">ĐĂNG NHẬP</div>
 
       <!-- Login form -->
       <div id="form-login">
@@ -1811,6 +1817,9 @@ canvas{display:block;cursor:crosshair}
         </div>
         <button class="auth-btn" id="login-btn" onclick="doLogin()">ĐĂNG NHẬP</button>
         <div class="auth-msg" id="login-msg"></div>
+        <div class="auth-switch">
+          Chưa có tài khoản? <a onclick="authSwitchTab('register')">Đăng ký ngay →</a>
+        </div>
       </div>
 
       <!-- Register form -->
@@ -1829,6 +1838,9 @@ canvas{display:block;cursor:crosshair}
         </div>
         <button class="auth-btn" id="reg-btn" onclick="doRegister()">TẠO TÀI KHOẢN</button>
         <div class="auth-msg" id="reg-msg"></div>
+        <div class="auth-switch">
+          Đã có tài khoản? <a onclick="authSwitchTab('login')">← Đăng nhập</a>
+        </div>
       </div>
 
       <div class="auth-guest">
@@ -2911,10 +2923,15 @@ function authSetLoading(btnId, loading) {
 function authSwitchTab(tab) {
   document.getElementById('form-login').style.display    = tab==='login'    ? '' : 'none';
   document.getElementById('form-register').style.display = tab==='register' ? '' : 'none';
-  document.getElementById('tab-login').classList.toggle('active',    tab==='login');
-  document.getElementById('tab-register').classList.toggle('active', tab==='register');
+  const titleEl = document.getElementById('auth-form-title');
+  if (titleEl) titleEl.textContent = tab === 'login' ? 'ĐĂNG NHẬP' : 'TẠO TÀI KHOẢN';
   setAuthMsg('login-msg','',false);
   setAuthMsg('reg-msg','',false);
+  // Focus vào input đầu tiên của form vừa hiện
+  const firstInput = tab==='login'
+    ? document.getElementById('login-user')
+    : document.getElementById('reg-user');
+  if (firstInput) setTimeout(() => firstInput.focus(), 50);
 }
 
 // ── Đăng nhập ────────────────────────────────────────────────
@@ -2945,6 +2962,10 @@ async function doRegister() {
   authSetLoading('reg-btn', false);
 
   if (data.error) return setAuthMsg('reg-msg', data.error, true);
+
+  // Lưu username để lần sau tự điền khi đăng nhập lại
+  try { localStorage.setItem('sa_username', data.username || username); } catch(e) {}
+
   setAuthMsg('reg-msg', '✓ Tạo tài khoản thành công!', false);
   setTimeout(() => onAuthSuccess(data), 700);
 }
@@ -2953,6 +2974,7 @@ async function doRegister() {
 function doGuest() {
   currentUser = null;
   localStorage.removeItem('sa_token');
+  // Giữ lại sa_username để lần sau vẫn tự điền nếu quay lại đăng nhập
   updateUserBadge();
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('connecting-screen').classList.remove('show');
@@ -2961,9 +2983,17 @@ function doGuest() {
 
 // ── Đăng xuất ────────────────────────────────────────────────
 function doLogout() {
+  const lastUser = currentUser?.username;
   currentUser = null;
   localStorage.removeItem('sa_token');
+  // Giữ sa_username để form login tự điền sẵn
   updateUserBadge();
+  authSwitchTab('login');
+  if (lastUser) {
+    const el = document.getElementById('login-user');
+    if (el) el.value = lastUser;
+    setTimeout(() => { const p = document.getElementById('login-pass'); if(p) p.focus(); }, 80);
+  }
   showAuthScreen();
 }
 
@@ -2971,6 +3001,8 @@ function doLogout() {
 function onAuthSuccess(data) {
   currentUser = { username: data.username, token: data.token, stats: data.stats };
   localStorage.setItem('sa_token', data.token);
+  // Lưu username để lần sau tự điền
+  try { localStorage.setItem('sa_username', data.username); } catch(e) {}
   if (data.campProgress) campProgress = data.campProgress;
   if (data.token) {
     apiCall('GET', '/api/shop', null, data.token).then(r => {
@@ -3059,8 +3091,23 @@ function syncGameResult(won) {
 let _authInitDone = false; // flag: đã xử lý auto-login xong chưa
 
 async function tryAutoLogin() {
-  const token = localStorage.getItem('sa_token');
+  const token    = localStorage.getItem('sa_token');
+  const savedUser = localStorage.getItem('sa_username');
+
   if (!token) {
+    // Chưa bao giờ đăng nhập/đăng ký
+    if (savedUser) {
+      // Đã đăng ký trước đây nhưng mất token → hiện form login với username điền sẵn
+      authSwitchTab('login');
+      const loginInput = document.getElementById('login-user');
+      if (loginInput) { loginInput.value = savedUser; }
+      const passInput = document.getElementById('login-pass');
+      if (passInput) setTimeout(() => passInput.focus(), 80);
+      setAuthMsg('login-msg', '⚡ Chào lại ' + savedUser + '! Nhập mật khẩu để tiếp tục.', false);
+    } else {
+      // Người mới → hiện form đăng ký
+      authSwitchTab('register');
+    }
     document.getElementById('auth-screen').classList.remove('hidden');
     return;
   }
@@ -3113,6 +3160,9 @@ async function tryAutoLogin() {
     // Timeout / lỗi mạng → ẩn connecting, hiện auth với thông báo
     _doneConnecting();
     authScreen.classList.remove('hidden');
+    authSwitchTab('login');
+    const _su = localStorage.getItem('sa_username');
+    if (_su) { const el = document.getElementById('login-user'); if(el) el.value = _su; }
     setAuthMsg('login-msg', '⚠ Server chưa phản hồi, vui lòng đăng nhập thủ công', true);
     const loginBtn = document.getElementById('login-btn');
     if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = 'ĐĂNG NHẬP'; }
@@ -3123,6 +3173,14 @@ async function tryAutoLogin() {
     _doneConnecting();
     localStorage.removeItem('sa_token');
     authScreen.classList.remove('hidden');
+    authSwitchTab('login');
+    // Điền sẵn username nếu có
+    const savedUser2 = localStorage.getItem('sa_username');
+    if (savedUser2) {
+      const loginInput = document.getElementById('login-user');
+      if (loginInput) { loginInput.value = savedUser2; }
+      setTimeout(() => { const p = document.getElementById('login-pass'); if(p) p.focus(); }, 80);
+    }
     setAuthMsg('login-msg', 'Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', true);
     return;
   }
