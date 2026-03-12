@@ -1359,7 +1359,6 @@ canvas{display:block;cursor:crosshair}
 .auth-guest a:hover{color:#fff;}
 /* User badge in menu */
 #user-badge{
-  position:absolute;top:18px;right:22px;z-index:10;
   display:flex;align-items:center;gap:10px;
   font-family:'Share Tech Mono',monospace;font-size:.72rem;letter-spacing:.05em;
 }
@@ -1867,41 +1866,47 @@ canvas{display:block;cursor:crosshair}
   <div class="cbracket cbracket-bl"></div>
   <div class="cbracket cbracket-br"></div>
 
-  <!-- User badge góc trên phải -->
-  <div id="user-badge" style="display:none">
-    <span id="user-badge-name"></span>
-    <span id="user-badge-stats"></span>
-    <button id="user-logout-btn" onclick="doLogout()">LOGOUT</button>
-  </div>
+  <!-- Góc trên phải: user badge + nút nhập code xếp dọc, không chồng lên nhau -->
+  <div style="position:absolute;top:18px;right:22px;z-index:20;
+              display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
 
-  <!-- Nhập Code — góc phải dưới user badge -->
-  <div id="code-panel-wrap" style="position:absolute;top:18px;right:22px;z-index:20;display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-    <button id="code-toggle-btn" onclick="toggleCodePanel()" style="
-      padding:5px 14px;font-family:'Black Ops One',cursive;font-size:.58rem;letter-spacing:2px;
-      background:rgba(212,160,23,.1);border:1px solid rgba(212,160,23,.3);
-      color:var(--gold2);cursor:pointer;border-radius:2px;transition:all .2s;
-    " onmouseenter="this.style.background='rgba(212,160,23,.2)'"
-       onmouseleave="this.style.background='rgba(212,160,23,.1)'">
-      🎁 NHẬP CODE
-    </button>
-    <div id="code-panel" style="display:none;flex-direction:column;gap:6px;
-      background:rgba(10,10,28,.96);border:1px solid rgba(212,160,23,.3);
-      padding:12px 14px;border-radius:3px;min-width:220px;
-      box-shadow:0 0 30px rgba(212,160,23,.1);">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:.55rem;letter-spacing:4px;color:var(--gold);margin-bottom:4px;">// NHẬP CODE ĐỔI QUÀ</div>
-      <input id="code-input" type="text" placeholder="Nhập code..."
-        style="width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(212,160,23,.25);
-        color:#fff;font-family:'Black Ops One',cursive;font-size:.75rem;letter-spacing:4px;
-        padding:8px 10px;outline:none;text-transform:uppercase;border-radius:2px;"
-        oninput="this.value=this.value.toUpperCase()"
-        onkeydown="if(event.key==='Enter')redeemCode()">
-      <button onclick="redeemCode()" style="
-        padding:7px 10px;font-family:'Black Ops One',cursive;font-size:.65rem;letter-spacing:2px;
-        background:rgba(212,160,23,.15);border:1px solid rgba(212,160,23,.4);
-        color:var(--gold2);cursor:pointer;border-radius:2px;transition:all .2s;
-      ">✓ ĐỔI NGAY</button>
-      <div id="code-msg" style="font-family:'Share Tech Mono',monospace;font-size:.6rem;min-height:16px;text-align:center;"></div>
+    <!-- User badge -->
+    <div id="user-badge" style="display:none">
+      <span id="user-badge-name"></span>
+      <span id="user-badge-stats"></span>
+      <button id="user-logout-btn" onclick="doLogout()">LOGOUT</button>
     </div>
+
+    <!-- Nhập Code — luôn nằm dưới badge -->
+    <div id="code-panel-wrap" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+      <button id="code-toggle-btn" onclick="toggleCodePanel()" style="
+        padding:5px 14px;font-family:'Black Ops One',cursive;font-size:.58rem;letter-spacing:2px;
+        background:rgba(212,160,23,.1);border:1px solid rgba(212,160,23,.3);
+        color:var(--gold2);cursor:pointer;border-radius:2px;transition:all .2s;
+      " onmouseenter="this.style.background='rgba(212,160,23,.2)'"
+         onmouseleave="this.style.background='rgba(212,160,23,.1)'">
+        🎁 NHẬP CODE
+      </button>
+      <div id="code-panel" style="display:none;flex-direction:column;gap:6px;
+        background:rgba(10,10,28,.96);border:1px solid rgba(212,160,23,.3);
+        padding:12px 14px;border-radius:3px;min-width:220px;
+        box-shadow:0 0 30px rgba(212,160,23,.1);">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.55rem;letter-spacing:4px;color:var(--gold);margin-bottom:4px;">// NHẬP CODE ĐỔI QUÀ</div>
+        <input id="code-input" type="text" placeholder="Nhập code..."
+          style="width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(212,160,23,.25);
+          color:#fff;font-family:'Black Ops One',cursive;font-size:.75rem;letter-spacing:4px;
+          padding:8px 10px;outline:none;text-transform:uppercase;border-radius:2px;"
+          oninput="this.value=this.value.toUpperCase()"
+          onkeydown="if(event.key==='Enter')redeemCode()">
+        <button onclick="redeemCode()" style="
+          padding:7px 10px;font-family:'Black Ops One',cursive;font-size:.65rem;letter-spacing:2px;
+          background:rgba(212,160,23,.15);border:1px solid rgba(212,160,23,.4);
+          color:var(--gold2);cursor:pointer;border-radius:2px;transition:all .2s;
+        ">✓ ĐỔI NGAY</button>
+        <div id="code-msg" style="font-family:'Share Tech Mono',monospace;font-size:.6rem;min-height:16px;text-align:center;"></div>
+      </div>
+    </div>
+
   </div>
 
   <div class="logo-wrap">
@@ -2961,27 +2966,14 @@ function doGuest() {
 
 // ── Đăng xuất ────────────────────────────────────────────────
 function doLogout() {
-  const lastUser = currentUser?.username;
   currentUser = null;
   localStorage.removeItem('sa_token');
-
-  // Reset sạch data tài khoản — tài khoản tiếp theo sẽ load từ server của họ
-  playerCoins      = 0;
-  ownedItems       = new Set();
-  equippedItems    = {};
-  usedCodes        = [];
-  hasBulletFireSkin = false;
-  campProgress     = { cleared: [], current: 0 };
-  initDefaultOwned();
-  updateCoinUI();
-
+  // Reset sạch toàn bộ data của tài khoản cũ
+  playerCoins = 0; ownedItems = new Set(); equippedItems = {};
+  usedCodes = []; hasBulletFireSkin = false;
+  campProgress = { cleared: [], current: 0 };
+  initDefaultOwned(); updateCoinUI();
   updateUserBadge();
-  authSwitchTab('login');
-  if (lastUser) {
-    const el = document.getElementById('login-user');
-    if (el) el.value = lastUser;
-    setTimeout(() => { const p = document.getElementById('login-pass'); if(p) p.focus(); }, 80);
-  }
   showAuthScreen();
 }
 
@@ -3300,35 +3292,27 @@ function initDefaultOwned() {
 
 // ── Lưu / Load coin ──────────────────────────────────────────
 function coinSave() {
-  // Gộp usedCodes + bulletFireSkin vào shopData để gắn với tài khoản, không phải máy
   const data = {
-    coins: playerCoins,
-    owned: [...ownedItems],
-    equipped: equippedItems,
-    usedCodes: usedCodes,
-    bulletFire: hasBulletFireSkin ? 1 : 0,
+    coins: playerCoins, owned: [...ownedItems], equipped: equippedItems,
+    usedCodes: usedCodes, bulletFire: hasBulletFireSkin ? 1 : 0,
   };
-  // Chỉ lưu localStorage khi guest (không có tài khoản)
-  if (!currentUser?.token) {
-    try { localStorage.setItem('sa_shop', JSON.stringify(data)); } catch {}
-  }
   if (currentUser?.token) {
     apiCall('POST', '/api/shop', { shopData: data }, currentUser.token);
+  } else {
+    try { localStorage.setItem('sa_shop', JSON.stringify(data)); } catch {}
   }
 }
 function coinLoad(data) {
   if (!data) {
-    // Chỉ fallback localStorage khi guest
-    if (!currentUser?.token) {
-      try { const d = localStorage.getItem('sa_shop'); if(d) data = JSON.parse(d); } catch {}
+    if (currentUser?.token) {
+      initDefaultOwned(); updateCoinUI(); return;
     }
-    // Tài khoản mới / shopData null trên server → bắt đầu từ 0
+    try { const d = localStorage.getItem('sa_shop'); if(d) data = JSON.parse(d); } catch {}
   }
   if (data) {
-    playerCoins      = data.coins   || 0;
-    ownedItems       = new Set(data.owned || []);
-    equippedItems    = data.equipped || {};
-    // Khôi phục usedCodes + bulletFire từ server (gắn với tài khoản)
+    playerCoins   = data.coins    || 0;
+    ownedItems    = new Set(data.owned || []);
+    equippedItems = data.equipped || {};
     if (Array.isArray(data.usedCodes)) usedCodes = data.usedCodes;
     if (data.bulletFire) hasBulletFireSkin = true;
   }
@@ -3613,8 +3597,7 @@ coinLoad();
 // ══════════════════════════════════════════
 // CODE ĐỔI QUÀ
 // ══════════════════════════════════════════
-// usedCodes + hasBulletFireSkin giờ được load qua coinLoad() từ shopData server
-// → gắn với tài khoản, không phải máy. Tài khoản mới = bắt đầu từ 0.
+// usedCodes + hasBulletFireSkin được load qua coinLoad() từ server (gắn với tài khoản)
 let usedCodes = [];
 let hasBulletFireSkin = false;
 
@@ -3655,13 +3638,12 @@ function redeemCode() {
   }
 
   usedCodes.push(code);
-  // Lưu qua coinSave → gắn với tài khoản trên server (không còn dùng localStorage riêng)
 
   if (gift.type === 'coins') {
-    addCoins(gift.amount, 'Code Gift');  // addCoins đã gọi coinSave() bên trong
+    addCoins(gift.amount, 'Code Gift'); // addCoins gọi coinSave() → sync server
   } else if (gift.type === 'bulletSkin') {
     hasBulletFireSkin = true;
-    coinSave(); // đồng bộ lên server
+    coinSave(); // sync lên server
   }
 
   msgEl.textContent = gift.msg;
