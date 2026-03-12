@@ -1851,7 +1851,7 @@ canvas{display:block;cursor:crosshair}
     <div class="shop-tabs">
       <button class="shop-tab active" onclick="shopSwitchTab('skins')"    id="stab-skins">🎨 Skin Nhân Vật</button>
       <button class="shop-tab"        onclick="shopSwitchTab('weapons')"  id="stab-weapons">🔫 Nâng Cấp Súng</button>
-      <button class="shop-tab"        onclick="shopSwitchTab('perks')"    id="stab-perks">⚡ Passive Buff</button>
+      <button class="shop-tab"        onclick="shopSwitchTab('accessories')" id="stab-accessories">👒 Phụ Kiện</button>
     </div>
     <div class="shop-grid" id="shop-grid"></div>
     <button class="shop-back-btn" onclick="goShopBack()">← Quay Lại Menu</button>
@@ -1872,6 +1872,36 @@ canvas{display:block;cursor:crosshair}
     <span id="user-badge-name"></span>
     <span id="user-badge-stats"></span>
     <button id="user-logout-btn" onclick="doLogout()">LOGOUT</button>
+  </div>
+
+  <!-- Nhập Code — góc phải dưới user badge -->
+  <div id="code-panel-wrap" style="position:absolute;top:18px;right:22px;z-index:20;display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+    <button id="code-toggle-btn" onclick="toggleCodePanel()" style="
+      padding:5px 14px;font-family:'Black Ops One',cursive;font-size:.58rem;letter-spacing:2px;
+      background:rgba(212,160,23,.1);border:1px solid rgba(212,160,23,.3);
+      color:var(--gold2);cursor:pointer;border-radius:2px;transition:all .2s;
+    " onmouseenter="this.style.background='rgba(212,160,23,.2)'"
+       onmouseleave="this.style.background='rgba(212,160,23,.1)'">
+      🎁 NHẬP CODE
+    </button>
+    <div id="code-panel" style="display:none;flex-direction:column;gap:6px;
+      background:rgba(10,10,28,.96);border:1px solid rgba(212,160,23,.3);
+      padding:12px 14px;border-radius:3px;min-width:220px;
+      box-shadow:0 0 30px rgba(212,160,23,.1);">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:.55rem;letter-spacing:4px;color:var(--gold);margin-bottom:4px;">// NHẬP CODE ĐỔI QUÀ</div>
+      <input id="code-input" type="text" placeholder="Nhập code..."
+        style="width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(212,160,23,.25);
+        color:#fff;font-family:'Black Ops One',cursive;font-size:.75rem;letter-spacing:4px;
+        padding:8px 10px;outline:none;text-transform:uppercase;border-radius:2px;"
+        oninput="this.value=this.value.toUpperCase()"
+        onkeydown="if(event.key==='Enter')redeemCode()">
+      <button onclick="redeemCode()" style="
+        padding:7px 10px;font-family:'Black Ops One',cursive;font-size:.65rem;letter-spacing:2px;
+        background:rgba(212,160,23,.15);border:1px solid rgba(212,160,23,.4);
+        color:var(--gold2);cursor:pointer;border-radius:2px;transition:all .2s;
+      ">✓ ĐỔI NGAY</button>
+      <div id="code-msg" style="font-family:'Share Tech Mono',monospace;font-size:.6rem;min-height:16px;text-align:center;"></div>
+    </div>
   </div>
 
   <div class="logo-wrap">
@@ -2586,12 +2616,16 @@ function renderSelect(){
   };
   CHARS.forEach(ch=>{
     const st=CS[ch.id]||{col:'#f5c842',glow:'245,200,66',role:'FIGHTER'};
+    // Dùng màu skin đang mặc (nếu có)
+    const equippedSkinId = equippedItems.skins?.[ch.id];
+    const equippedSkin = equippedSkinId ? findShopItem(equippedSkinId) : null;
+    const displayCol = (equippedSkin && equippedSkin.color) ? equippedSkin.color : st.col;
     const isSel=ch.id===selChar;
     const d=document.createElement('div');
     d.className='char-card'+(isSel?' sel':'');
     d.style.cssText='--card-col:'+st.col+';--card-glow:'+st.glow;
     d.onclick=()=>{selChar=ch.id;renderSelect();};
-    d.innerHTML='<div class="char-preview"><canvas class="char-preview-canvas" width="120" height="120" data-charid="'+ch.id+'" data-col="'+st.col+'"></canvas><div class="char-name-tag">'+st.role+'</div><div class="sel-badge">\u2713 CH\u1ecdN</div></div>'
+    d.innerHTML='<div class="char-preview"><canvas class="char-preview-canvas" width="120" height="120" data-charid="'+ch.id+'" data-col="'+displayCol+'"></canvas><div class="char-name-tag">'+st.role+'</div><div class="sel-badge">\u2713 CH\u1ecdN</div></div>'
     +'<div class="char-info"><div class="char-name">'+ch.name+'</div><div class="char-role-tag">'+st.role+'</div>'
     +'<div class="stats-block">'
     +'<div class="stat-row"><span class="stat-ico">\u2764</span><span class="stat-label">HP</span>'
@@ -3204,20 +3238,34 @@ const SHOP_ITEMS = {
     { id:'weap_all_reload', name:'Bộ Nạp Nhanh',    gunId:'all',    icon:'⚡', price:150, desc:'Giảm thời gian nạp đạn mọi súng', stats:['-15% reload'], effect:{gun:'all', reloadMult:0.85} },
     { id:'weap_all_range',  name:'Ống Ngắm Quang Học',gunId:'all',  icon:'🔭', price:180, desc:'Tăng tầm bắn tất cả súng', stats:['+15% tầm bắn'], effect:{gun:'all', rangeMult:1.15} },
   ],
-  perks: [
-    { id:'perk_hp_regen',   name:'Tái Sinh HP',    icon:'💚', price:130, desc:'Hồi 5 HP mỗi 3 giây khi không bị bắn', stats:['Hồi 5 HP/3s'], effect:{type:'hpRegen', val:5} },
-    { id:'perk_armor_boost',name:'Giáp Cứng',      icon:'🛡', price:110, desc:'Tăng thêm 15 giáp ban đầu', stats:['+15 Armor'], effect:{type:'armorBoost', val:15} },
-    { id:'perk_speed_boost',name:'Đế Giày Tốc Độ', icon:'👟', price:90,  desc:'Tăng tốc độ di chuyển +0.15', stats:['+0.15 Speed'], effect:{type:'speedBoost', val:0.15} },
-    { id:'perk_crit_chance',name:'Đòn Chí Mạng',   icon:'💢', price:160, desc:'5% cơ hội nhân đôi sát thương', stats:['5% Crit x2'], effect:{type:'critChance', val:0.05} },
-    { id:'perk_last_stand', name:'Ý Chí Thép',     icon:'🔥', price:200, desc:'Khi HP < 20%, tăng tốc +0.4', stats:['<20% HP → +0.4 tốc'], effect:{type:'lastStand', val:0.4} },
-    { id:'perk_double_drop',name:'May Mắn',         icon:'🍀', price:170, desc:'Nhặt item HP hồi thêm +15 HP', stats:['+15 HP từ item'], effect:{type:'itemBoost', val:15} },
+  accessories: [
+    // Mũ (hat) — slot: hat
+    { id:'acc_hat_helmet',    name:'Mũ Bảo Hiểm',    slot:'hat', icon:'⛑️', price:80,  desc:'Giảm sát thương đầu', stats:['+15 Armor','+1.2 HP/s'], effect:{type:'armorBoost',val:15,hpRegen:1.2} },
+    { id:'acc_hat_beret',     name:'Mũ Beret',        slot:'hat', icon:'🎩', price:120, desc:'Tăng tốc độ phản xạ', stats:['+0.15 Speed','+10 HP'],   effect:{type:'speedBoost',val:0.15,hpBonus:10} },
+    { id:'acc_hat_crown',     name:'Vương Miện',      slot:'hat', icon:'👑', price:250, desc:'Giáp tối thượng',     stats:['+20 Armor','+20 HP'],      effect:{type:'armorBoost',val:20,hpBonus:20} },
+    // Mắt kính (glasses) — slot: glasses
+    { id:'acc_glasses_scope', name:'Kính Ngắm',       slot:'glasses', icon:'🔭', price:90,  desc:'Tăng tầm bắn',       stats:['+1.2 Range','5% Crit'],  effect:{type:'rangeMult',val:1.15,critChance:0.05} },
+    { id:'acc_glasses_tac',   name:'Kính Chiến Thuật',slot:'glasses', icon:'🕶️', price:130, desc:'Tốc bắn nhanh hơn',  stats:['+1.5 FireRate','+10 HP'],effect:{type:'fireRate',val:0.85,hpBonus:10} },
+    { id:'acc_glasses_laser', name:'Kính Laser',      slot:'glasses', icon:'😎', price:200, desc:'Đòn chí mạng tăng',  stats:['10% Crit x2','+0.1 Spd'],effect:{type:'critChance',val:0.10,speedBoost:0.1} },
+    // Găng tay (gloves) — slot: gloves
+    { id:'acc_gloves_iron',   name:'Găng Tay Sắt',    slot:'gloves', icon:'🥊', price:100, desc:'Đấm mạnh hơn, đạn to',stats:['+2 Damage','+1.2 Armor'],effect:{type:'dmgBoost',val:2,armorBonus:12} },
+    { id:'acc_gloves_speed',  name:'Găng Tốc Xạ',     slot:'gloves', icon:'⚡', price:150, desc:'Bắn nhanh hơn',       stats:['-10% Reload','+1.5 CD'], effect:{type:'reloadMult',val:0.90,cdBonus:-2} },
+    { id:'acc_gloves_fire',   name:'Găng Lửa',        slot:'gloves', icon:'🔥', price:220, desc:'Đạn có hiệu ứng lửa', stats:['+5 Damage','1.2x Speed'],effect:{type:'dmgBoost',val:5,speedBoost:0.2} },
+    // Giày (shoes) — slot: shoes
+    { id:'acc_shoes_sprint',  name:'Giày Chạy Nhanh', slot:'shoes', icon:'👟', price:85,  desc:'Tăng tốc độ',          stats:['+0.2 Speed','+1.2 HP/s'],effect:{type:'speedBoost',val:0.2,hpRegen:1.2} },
+    { id:'acc_shoes_stealth', name:'Giày Ninja',      slot:'shoes', icon:'🥷', price:140, desc:'Nhẹ như gió',           stats:['+0.3 Speed','+5 HP'],    effect:{type:'speedBoost',val:0.3,hpBonus:5} },
+    { id:'acc_shoes_rocket',  name:'Giày Tên Lửa',   slot:'shoes', icon:'🚀', price:230, desc:'Tốc độ tối thượng',     stats:['+0.4 Speed','5% Crit'],  effect:{type:'speedBoost',val:0.4,critChance:0.05} },
+    // Áo choàng (cape) — slot: cape
+    { id:'acc_cape_basic',    name:'Áo Choàng Vải',   slot:'cape', icon:'🧥', price:70,  desc:'Bảo vệ nhẹ',            stats:['+10 HP','+1.2 Armor'],   effect:{type:'hpBonus',val:10,armorBonus:12} },
+    { id:'acc_cape_dragon',   name:'Áo Choàng Rồng',  slot:'cape', icon:'🐲', price:180, desc:'Sức mạnh của rồng',     stats:['+20 HP','+3 Damage'],    effect:{type:'hpBonus',val:20,dmgBoost:3} },
+    { id:'acc_cape_shadow',   name:'Áo Choàng Bóng Tối',slot:'cape',icon:'🌑',price:260, desc:'Huyền bí tuyệt đối',   stats:['+15 HP','15% Crit'],     effect:{type:'hpBonus',val:15,critChance:0.15} },
   ]
 };
 
 // ── State ─────────────────────────────────────────────────────
 let playerCoins   = 0;
 let ownedItems    = new Set(); // Set of item IDs
-let equippedItems = {};        // { skins: {warrior:'skin_warrior_default',...}, perks: ['perk_id',...] }
+let equippedItems = {};        // { skins: {warrior:...}, weapons:[...], accessories:{hat:id,glasses:id,gloves:id,shoes:id,cape:id} }
 let activeShopTab = 'skins';
 
 // Mặc định sở hữu skin gốc
@@ -3229,6 +3277,7 @@ function initDefaultOwned() {
     tank:'skin_tank_default',       sniper:'skin_sniper_default'
   };
   if (!equippedItems.perks) equippedItems.perks = [];
+  if (!equippedItems.accessories) equippedItems.accessories = {};
 }
 
 // ── Lưu / Load coin ──────────────────────────────────────────
@@ -3285,7 +3334,7 @@ function goShopBack() {
 }
 function shopSwitchTab(tab) {
   activeShopTab = tab;
-  ['skins','weapons','perks'].forEach(t => {
+  ['skins','weapons','accessories'].forEach(t => {
     document.getElementById('stab-'+t).classList.toggle('active', t===tab);
   });
   renderShop(tab);
@@ -3295,7 +3344,17 @@ function shopSwitchTab(tab) {
 function renderShop(tab) {
   const grid = document.getElementById('shop-grid');
   const items = SHOP_ITEMS[tab];
+  if (!items) return;
   grid.innerHTML = '';
+
+  // Accessories header — hiện số slot đang mặc
+  if (tab === 'accessories') {
+    const accCount = Object.keys(equippedItems.accessories||{}).length;
+    const header = document.createElement('div');
+    header.style.cssText = 'grid-column:1/-1;padding:8px 12px;background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);border-radius:3px;font-family:"Share Tech Mono",monospace;font-size:.65rem;color:var(--cyan);letter-spacing:.05em;margin-bottom:4px;';
+    header.innerHTML = `🎽 ĐANG MẶC: <strong>${accCount}/3</strong> PHỤ KIỆN &nbsp;·&nbsp; Mỗi vị trí (mũ, kính, găng, giày, áo) tối đa 1 &nbsp;·&nbsp; Tổng tối đa 3 khác vị trí`;
+    grid.appendChild(header);
+  }
 
   items.forEach(item => {
     const owned    = ownedItems.has(item.id);
@@ -3306,9 +3365,16 @@ function renderShop(tab) {
     card.className = 'shop-card' + (owned?' owned':'') + (equipped?' equipped':'') + (!owned&&!canAfford?' locked':'');
 
     let badgeHtml = '';
-    if (equipped)    badgeHtml = '<div class="shop-card-badge equipped-badge">✓ ĐÃ TRANG BỊ</div>';
+    if (equipped)    badgeHtml = '<div class="shop-card-badge equipped-badge">✓ ĐÃ MẶC</div>';
     else if (owned)  badgeHtml = '<div class="shop-card-badge owned-badge">SỞ HỮU</div>';
     else if (item.price <= 100) badgeHtml = '<div class="shop-card-badge new-badge">PHỔ BIẾN</div>';
+
+    // Slot badge cho accessories
+    let slotBadge = '';
+    if (item.slot) {
+      const slotNames = {hat:'MŨ', glasses:'KÍNH', gloves:'GĂNG', shoes:'GIÀY', cape:'ÁO CHOÀNG'};
+      slotBadge = `<div style="display:inline-block;font-family:'Share Tech Mono',monospace;font-size:.48rem;padding:1px 6px;margin-bottom:4px;border:1px solid rgba(0,212,255,.3);color:var(--cyan);border-radius:2px;">${slotNames[item.slot]||item.slot.toUpperCase()}</div>`;
+    }
 
     const statsHtml = item.stats.length
       ? '<div class="shop-card-stat">' + item.stats.map(s=>`<span>${s}</span>`).join('') + '</div>'
@@ -3318,8 +3384,8 @@ function renderShop(tab) {
     if (item.price === 0 || owned) {
       if (canBeEquipped(item)) {
         btnHtml = equipped
-          ? '<button class="shop-buy-btn equipped-btn">✓ Đang trang bị</button>'
-          : `<button class="shop-buy-btn equip" onclick="equipItem('${item.id}')">Trang Bị</button>`;
+          ? '<button class="shop-buy-btn equipped-btn">✓ Đang mặc</button>'
+          : `<button class="shop-buy-btn equip" onclick="equipItem('${item.id}')">Mặc Vào</button>`;
       }
     } else {
       btnHtml = canAfford
@@ -3327,19 +3393,6 @@ function renderShop(tab) {
         : `<button class="shop-buy-btn cant-afford">Cần ${item.price} 🪙</button>`;
     }
 
-    // Tạo price+btn row
-    let priceBtnHtml = '';
-    if (item.price === 0 || owned) {
-      priceBtnHtml = btnHtml;
-    } else {
-      // Hiện giá to + nút mua cùng nhau
-      priceBtnHtml = `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;gap:6px;">
-        <div class="shop-card-price">${item.price}</div>
-        <div style="flex:1">${btnHtml}</div>
-      </div>`;
-    }
-
-    // Nút mua / trang bị luôn nằm cuối
     const actionHtml = item.price === 0 || owned
       ? btnHtml
       : `<div style="font-family:'Black Ops One',sans-serif;font-size:.82rem;color:var(--gold2);margin-bottom:3px;">🪙 ${item.price}</div>${btnHtml}`;
@@ -3347,6 +3400,7 @@ function renderShop(tab) {
     card.innerHTML = `
       ${badgeHtml}
       <div class="shop-card-icon">${item.icon}</div>
+      ${slotBadge}
       <div class="shop-card-name">${item.name}</div>
       <div class="shop-card-desc">${item.desc}</div>
       ${statsHtml}
@@ -3358,12 +3412,13 @@ function renderShop(tab) {
 
 function isEquipped(item) {
   if (item.charId) return equippedItems.skins?.[item.charId] === item.id;
+  if (item.slot)   return equippedItems.accessories?.[item.slot] === item.id;
   if (item.effect?.type) return equippedItems.perks?.includes(item.id);
   if (item.gunId)  return equippedItems.weapons?.includes(item.id);
   return false;
 }
 function canBeEquipped(item) {
-  return !!(item.charId || item.effect?.type || item.gunId);
+  return !!(item.charId || item.slot || item.effect?.type || item.gunId);
 }
 
 // ── Mua item ─────────────────────────────────────────────────
@@ -3389,6 +3444,18 @@ function equipItem(id) {
     // Skin nhân vật
     if (!equippedItems.skins) equippedItems.skins = {};
     equippedItems.skins[item.charId] = id;
+  } else if (item.slot) {
+    // Phụ kiện — tối đa 3 phụ kiện, mỗi slot khác nhau
+    if (!equippedItems.accessories) equippedItems.accessories = {};
+    const currentSlots = Object.keys(equippedItems.accessories);
+    const alreadyInSlot = equippedItems.accessories[item.slot] !== undefined;
+    // Nếu slot này chưa được mặc và đã đủ 3 phụ kiện → tháo slot cũ nhất
+    if (!alreadyInSlot && currentSlots.length >= 3) {
+      const oldestSlot = currentSlots[0];
+      delete equippedItems.accessories[oldestSlot];
+    }
+    // Mặc vào slot (thay thế nếu slot đó đã có)
+    equippedItems.accessories[item.slot] = id;
   } else if (item.effect?.type) {
     // Perk — tối đa 2 perk cùng lúc
     if (!equippedItems.perks) equippedItems.perks = [];
@@ -3453,7 +3520,7 @@ function applyShopBonuses(player) {
     if (weap.effect.rangeMult)   player.gun = {...player.gun, bspd:    Math.round(player.gun.bspd * weap.effect.rangeMult)};
   });
 
-  // Perks
+  // Perks (legacy)
   (equippedItems.perks||[]).forEach(pid => {
     const perk = findShopItem(pid);
     if (!perk) return;
@@ -3464,6 +3531,22 @@ function applyShopBonuses(player) {
     if (e.type==='critChance') player._critChance   = e.val;
     if (e.type==='hpRegen')    player._hpRegen      = e.val;
     if (e.type==='itemBoost')  player._itemBoost    = e.val;
+  });
+
+  // Accessories — áp dụng hiệu ứng phụ kiện
+  Object.values(equippedItems.accessories||{}).forEach(aid => {
+    const acc = findShopItem(aid);
+    if (!acc || !acc.effect) return;
+    const e = acc.effect;
+    if (e.type==='armorBoost' || e.armorBonus) player.armor = Math.min(200, player.armor + (e.val||0) + (e.armorBonus||0));
+    if (e.type==='speedBoost' || e.speedBoost) player.speed += (e.val||0) + (e.speedBoost||0);
+    if (e.type==='hpBonus'    || e.hpBonus)    { player.hp = Math.min(player.maxHp + (e.val||0) + (e.hpBonus||0), player.hp + (e.val||0) + (e.hpBonus||0)); player.maxHp += (e.val||0) + (e.hpBonus||0); }
+    if (e.type==='dmgBoost'   || e.dmgBoost)   player.gun = {...player.gun, damage: player.gun.damage + (e.val||0) + (e.dmgBoost||0)};
+    if (e.type==='rangeMult')  player.gun = {...player.gun, bspd: Math.round(player.gun.bspd * (e.val||1))};
+    if (e.type==='fireRate' || e.reloadMult) player.gun = {...player.gun, reloadMs: Math.round(player.gun.reloadMs * (e.val||1)), cd: Math.max(1, player.gun.cd + (e.cdBonus||0))};
+    if (e.critChance)          player._critChance = (player._critChance||0) + e.critChance;
+    if (e.hpRegen)             player._hpRegen = (player._hpRegen||0) + e.hpRegen;
+    if (e.type==='critChance') player._critChance = (player._critChance||0) + e.val;
   });
 
   // Reload mag
@@ -3491,6 +3574,67 @@ function tickPassivePerks(player) {
 }
 
 coinLoad();
+
+// ══════════════════════════════════════════
+// CODE ĐỔI QUÀ
+// ══════════════════════════════════════════
+let usedCodes = JSON.parse(localStorage.getItem('sa_usedCodes')||'[]');
+let hasBulletFireSkin = localStorage.getItem('sa_bulletFire') === '1';
+
+const GIFT_CODES = {
+  'VIP999':         { type:'coins', amount:999,  msg:'🎉 +999 XU từ code VIP999!' },
+  'ANHYEUBE':       { type:'coins', amount:5200, msg:'💖 +5200 XU từ code ANHYEUBE!' },
+  'VTUONGDEPTRAI':  { type:'bulletSkin', skin:'fire', msg:'🔥 Skin đạn lửa đã được mở khóa!' },
+};
+
+function toggleCodePanel() {
+  const p = document.getElementById('code-panel');
+  p.style.display = p.style.display === 'flex' ? 'none' : 'flex';
+  if (p.style.display === 'flex') {
+    document.getElementById('code-input').focus();
+    document.getElementById('code-msg').textContent = '';
+    document.getElementById('code-msg').style.color = '';
+  }
+}
+
+function redeemCode() {
+  const input = document.getElementById('code-input');
+  const msgEl = document.getElementById('code-msg');
+  const code = input.value.trim().toUpperCase();
+  if (!code) return;
+
+  if (usedCodes.includes(code)) {
+    msgEl.textContent = '⚠ Code đã được dùng rồi!';
+    msgEl.style.color = 'var(--amber)';
+    return;
+  }
+
+  const gift = GIFT_CODES[code];
+  if (!gift) {
+    msgEl.textContent = '✕ Code không hợp lệ!';
+    msgEl.style.color = 'var(--red2)';
+    input.value = '';
+    return;
+  }
+
+  usedCodes.push(code);
+  localStorage.setItem('sa_usedCodes', JSON.stringify(usedCodes));
+
+  if (gift.type === 'coins') {
+    addCoins(gift.amount, 'Code Gift');
+  } else if (gift.type === 'bulletSkin') {
+    hasBulletFireSkin = true;
+    localStorage.setItem('sa_bulletFire', '1');
+  }
+
+  msgEl.textContent = gift.msg;
+  msgEl.style.color = 'var(--green)';
+  input.value = '';
+  setTimeout(() => {
+    msgEl.textContent = '';
+    document.getElementById('code-panel').style.display = 'none';
+  }, 3000);
+}
 
 campLoad();
 
@@ -4522,7 +4666,6 @@ function buildMap(){
     buildMapIsland,
     buildMapFortress,
     buildMapOpen,
-    buildMapCross,
     buildMapRandom,
   ];
   const pick = layouts[Math.floor(Math.random() * layouts.length)];
@@ -4604,23 +4747,7 @@ function buildMapOpen(){
   ];
 }
 
-// Layout 6: Hình chữ thập trung tâm
-function buildMapCross(){
-  return [
-    // Thanh ngang
-    {x:280,y:295,w:180,h:40},{x:640,y:295,w:180,h:40},
-    // Thanh dọc
-    {x:520,y:120,w:60,h:150},{x:520,y:390,w:60,h:150},
-    // Góc nhỏ
-    {x:160,y:160,w:60,h:60},{x:880,y:160,w:60,h:60},
-    {x:160,y:430,w:60,h:60},{x:880,y:430,w:60,h:60},
-    // Rải rác
-    {x:350,y:160,w:45,h:45},{x:700,y:430,w:45,h:45},
-    {x:350,y:430,w:45,h:45},{x:700,y:160,w:45,h:45},
-  ];
-}
-
-// Layout 7: Hoàn toàn ngẫu nhiên (procedural)
+// Layout 6: Hoàn toàn ngẫu nhiên (procedural)
 function buildMapRandom(){
   const result = [];
   const r = ()=>Math.random();
@@ -5062,7 +5189,10 @@ function hcScore(px,py,tgt,aggr){
   if(los({x:px,y:py},tgt)) s+=100;
   const ideal=200-aggr*80;
   s+=Math.max(0,80-Math.abs(d-ideal)*0.5);
-  if(px<40||px>W-TS-40||py<40||py>H-TS-40) s-=60;
+  // Phạt nặng hơn khi ở góc (cách 2 tường cùng lúc)
+  const nearLeft=px<60, nearRight=px>W-TS-60, nearTop=py<60, nearBot=py>H-TS-60;
+  if(px<40||px>W-TS-40||py<40||py>H-TS-40) s-=80;
+  if((nearLeft||nearRight)&&(nearTop||nearBot)) s-=200; // góc map = trừ nặng
   s-=dangerScore(px,py)*0.5;
   return s;
 }
@@ -5189,6 +5319,13 @@ function runAI(bot,tgt){
   // 7. Fallback: tiến thẳng vào
   else {
     dir={dx:Math.sign(tgt.x-bot.x),dy:Math.sign(tgt.y-bot.y)};
+  }
+
+  // Thoát góc: nếu AI bị kẹt ở góc map → đẩy vào trung tâm
+  const inCornerX = bot.x < 50 || bot.x > W-TS-50;
+  const inCornerY = bot.y < 50 || bot.y > H-TS-50;
+  if(inCornerX && inCornerY){
+    dir = {dx: Math.sign(W/2 - bot.x), dy: Math.sign(H/2 - bot.y)};
   }
 
   // Quyết định bắn
@@ -5562,11 +5699,28 @@ function draw(){
 
   // Bullets
   bullets.forEach(b=>{
-    ctx.strokeStyle='rgba(255,220,60,.22)';ctx.lineWidth=b.sz*.6;
-    ctx.beginPath();ctx.moveTo(b.x-b.vx*4,b.y-b.vy*4);ctx.lineTo(b.x,b.y);ctx.stroke();
-    const bg=ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,b.sz*1.8);
-    bg.addColorStop(0,'#fff');bg.addColorStop(.5,'#ffe066');bg.addColorStop(1,'rgba(255,100,0,0)');
-    ctx.fillStyle=bg;ctx.beginPath();ctx.arc(b.x,b.y,b.sz*1.8,0,Math.PI*2);ctx.fill();
+    const isMyBullet = b.ownerId === myId;
+    if (hasBulletFireSkin && isMyBullet) {
+      // Skin đạn lửa
+      ctx.strokeStyle='rgba(255,100,0,.4)';ctx.lineWidth=b.sz*.8;
+      ctx.beginPath();ctx.moveTo(b.x-b.vx*5,b.y-b.vy*5);ctx.lineTo(b.x,b.y);ctx.stroke();
+      const fg=ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,b.sz*2.5);
+      fg.addColorStop(0,'#fff');fg.addColorStop(.3,'#ffff00');fg.addColorStop(.6,'#ff6600');fg.addColorStop(1,'rgba(255,0,0,0)');
+      ctx.fillStyle=fg;ctx.beginPath();ctx.arc(b.x,b.y,b.sz*2.5,0,Math.PI*2);ctx.fill();
+      // Tia lửa nhỏ
+      ctx.strokeStyle='rgba(255,120,0,.7)';ctx.lineWidth=1;
+      for(let f=0;f<3;f++){
+        const ang=Math.atan2(-b.vy,-b.vx)+(Math.random()-.5)*1.2;
+        const len=6+Math.random()*8;
+        ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x+Math.cos(ang)*len,b.y+Math.sin(ang)*len);ctx.stroke();
+      }
+    } else {
+      ctx.strokeStyle='rgba(255,220,60,.22)';ctx.lineWidth=b.sz*.6;
+      ctx.beginPath();ctx.moveTo(b.x-b.vx*4,b.y-b.vy*4);ctx.lineTo(b.x,b.y);ctx.stroke();
+      const bg=ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,b.sz*1.8);
+      bg.addColorStop(0,'#fff');bg.addColorStop(.5,'#ffe066');bg.addColorStop(1,'rgba(255,100,0,0)');
+      ctx.fillStyle=bg;ctx.beginPath();ctx.arc(b.x,b.y,b.sz*1.8,0,Math.PI*2);ctx.fill();
+    }
   });
 
   // Effects
