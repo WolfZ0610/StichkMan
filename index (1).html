@@ -1267,7 +1267,7 @@ canvas{display:block;cursor:crosshair}
     var(--ink);
 }
 .auth-wrap{
-  position:relative;z-index:5;
+  position:relative;z-index:2;
   display:flex;flex-direction:column;align-items:center;gap:0;
   width:100%;max-width:400px;
 }
@@ -1286,7 +1286,7 @@ canvas{display:block;cursor:crosshair}
   width:100%;background:rgba(255,255,255,.03);
   border:1px solid rgba(0,212,255,.15);
   border-radius:2px;padding:28px 32px 24px;
-  position:relative;z-index:5;
+  position:relative;
 }
 .auth-box::before{
   content:'';position:absolute;top:0;left:0;right:0;height:1px;
@@ -2961,9 +2961,27 @@ function doGuest() {
 
 // ── Đăng xuất ────────────────────────────────────────────────
 function doLogout() {
+  const lastUser = currentUser?.username;
   currentUser = null;
   localStorage.removeItem('sa_token');
+
+  // Reset sạch data tài khoản — tài khoản tiếp theo sẽ load từ server của họ
+  playerCoins      = 0;
+  ownedItems       = new Set();
+  equippedItems    = {};
+  usedCodes        = [];
+  hasBulletFireSkin = false;
+  campProgress     = { cleared: [], current: 0 };
+  initDefaultOwned();
+  updateCoinUI();
+
   updateUserBadge();
+  authSwitchTab('login');
+  if (lastUser) {
+    const el = document.getElementById('login-user');
+    if (el) el.value = lastUser;
+    setTimeout(() => { const p = document.getElementById('login-pass'); if(p) p.focus(); }, 80);
+  }
   showAuthScreen();
 }
 
@@ -3282,20 +3300,37 @@ function initDefaultOwned() {
 
 // ── Lưu / Load coin ──────────────────────────────────────────
 function coinSave() {
-  const data = { coins: playerCoins, owned: [...ownedItems], equipped: equippedItems };
-  try { localStorage.setItem('sa_shop', JSON.stringify(data)); } catch {}
+  // Gộp usedCodes + bulletFireSkin vào shopData để gắn với tài khoản, không phải máy
+  const data = {
+    coins: playerCoins,
+    owned: [...ownedItems],
+    equipped: equippedItems,
+    usedCodes: usedCodes,
+    bulletFire: hasBulletFireSkin ? 1 : 0,
+  };
+  // Chỉ lưu localStorage khi guest (không có tài khoản)
+  if (!currentUser?.token) {
+    try { localStorage.setItem('sa_shop', JSON.stringify(data)); } catch {}
+  }
   if (currentUser?.token) {
     apiCall('POST', '/api/shop', { shopData: data }, currentUser.token);
   }
 }
 function coinLoad(data) {
   if (!data) {
-    try { const d = localStorage.getItem('sa_shop'); if(d) data = JSON.parse(d); } catch {}
+    // Chỉ fallback localStorage khi guest
+    if (!currentUser?.token) {
+      try { const d = localStorage.getItem('sa_shop'); if(d) data = JSON.parse(d); } catch {}
+    }
+    // Tài khoản mới / shopData null trên server → bắt đầu từ 0
   }
   if (data) {
-    playerCoins   = data.coins   || 0;
-    ownedItems    = new Set(data.owned || []);
-    equippedItems = data.equipped || {};
+    playerCoins      = data.coins   || 0;
+    ownedItems       = new Set(data.owned || []);
+    equippedItems    = data.equipped || {};
+    // Khôi phục usedCodes + bulletFire từ server (gắn với tài khoản)
+    if (Array.isArray(data.usedCodes)) usedCodes = data.usedCodes;
+    if (data.bulletFire) hasBulletFireSkin = true;
   }
   initDefaultOwned();
   updateCoinUI();
@@ -3578,8 +3613,10 @@ coinLoad();
 // ══════════════════════════════════════════
 // CODE ĐỔI QUÀ
 // ══════════════════════════════════════════
-let usedCodes = JSON.parse(localStorage.getItem('sa_usedCodes')||'[]');
-let hasBulletFireSkin = localStorage.getItem('sa_bulletFire') === '1';
+// usedCodes + hasBulletFireSkin giờ được load qua coinLoad() từ shopData server
+// → gắn với tài khoản, không phải máy. Tài khoản mới = bắt đầu từ 0.
+let usedCodes = [];
+let hasBulletFireSkin = false;
 
 const GIFT_CODES = {
   'VIP999':         { type:'coins', amount:999,  msg:'🎉 +999 XU từ code VIP999!' },
@@ -3618,13 +3655,13 @@ function redeemCode() {
   }
 
   usedCodes.push(code);
-  localStorage.setItem('sa_usedCodes', JSON.stringify(usedCodes));
+  // Lưu qua coinSave → gắn với tài khoản trên server (không còn dùng localStorage riêng)
 
   if (gift.type === 'coins') {
-    addCoins(gift.amount, 'Code Gift');
+    addCoins(gift.amount, 'Code Gift');  // addCoins đã gọi coinSave() bên trong
   } else if (gift.type === 'bulletSkin') {
     hasBulletFireSkin = true;
-    localStorage.setItem('sa_bulletFire', '1');
+    coinSave(); // đồng bộ lên server
   }
 
   msgEl.textContent = gift.msg;
