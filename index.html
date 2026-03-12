@@ -1293,25 +1293,17 @@ canvas{display:block;cursor:crosshair}
   background:linear-gradient(90deg,transparent,var(--cyan),transparent);
   opacity:.5;
 }
-/* Form title (thay tab) */
-.auth-form-title{
-  font-family:'Black Ops One',sans-serif;
-  font-size:1.15rem;letter-spacing:.18em;
-  color:var(--cyan);margin-bottom:22px;
-  text-align:center;
-  text-shadow:0 0 18px rgba(0,212,255,.35);
+/* Tab switcher */
+.auth-tabs{display:flex;margin-bottom:24px;border-bottom:1px solid var(--bdr-dim);}
+.auth-tab{
+  flex:1;padding:10px 0;font-family:'Rajdhani',sans-serif;font-weight:600;
+  font-size:.95rem;letter-spacing:.1em;text-transform:uppercase;
+  background:none;border:none;color:var(--txt-mid);cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px;
+  transition:color .2s,border-color .2s;
 }
-/* Switch link */
-.auth-switch{
-  margin-top:14px;text-align:center;
-  font-family:'Share Tech Mono',monospace;font-size:.7rem;
-  letter-spacing:.06em;color:var(--txt-dim);
-}
-.auth-switch a{
-  color:var(--cyan);text-decoration:none;cursor:pointer;
-  transition:opacity .15s;
-}
-.auth-switch a:hover{opacity:.75;}
+.auth-tab.active{color:var(--cyan);border-bottom-color:var(--cyan);}
+.auth-tab:hover:not(.active){color:rgba(255,255,255,.6);}
 /* Form fields */
 .auth-field{margin-bottom:16px;}
 .auth-label{
@@ -1367,7 +1359,6 @@ canvas{display:block;cursor:crosshair}
 .auth-guest a:hover{color:#fff;}
 /* User badge in menu */
 #user-badge{
-  position:absolute;top:18px;right:22px;z-index:10;
   display:flex;align-items:center;gap:10px;
   font-family:'Share Tech Mono',monospace;font-size:.72rem;letter-spacing:.05em;
 }
@@ -1802,8 +1793,10 @@ canvas{display:block;cursor:crosshair}
     <div class="auth-logo">STICKMAN ARENA</div>
     <div class="auth-sub">⬡ &nbsp;Tactical PVP &nbsp;·&nbsp; Online &nbsp;·&nbsp; Campaign&nbsp; ⬡</div>
     <div class="auth-box">
-      <!-- Dynamic header thay tab -->
-      <div class="auth-form-title" id="auth-form-title">ĐĂNG NHẬP</div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-login"  onclick="authSwitchTab('login')">Đăng Nhập</button>
+        <button class="auth-tab"        id="tab-register" onclick="authSwitchTab('register')">Đăng Ký</button>
+      </div>
 
       <!-- Login form -->
       <div id="form-login">
@@ -1817,9 +1810,6 @@ canvas{display:block;cursor:crosshair}
         </div>
         <button class="auth-btn" id="login-btn" onclick="doLogin()">ĐĂNG NHẬP</button>
         <div class="auth-msg" id="login-msg"></div>
-        <div class="auth-switch">
-          Chưa có tài khoản? <a onclick="authSwitchTab('register')">Đăng ký ngay →</a>
-        </div>
       </div>
 
       <!-- Register form -->
@@ -1838,9 +1828,6 @@ canvas{display:block;cursor:crosshair}
         </div>
         <button class="auth-btn" id="reg-btn" onclick="doRegister()">TẠO TÀI KHOẢN</button>
         <div class="auth-msg" id="reg-msg"></div>
-        <div class="auth-switch">
-          Đã có tài khoản? <a onclick="authSwitchTab('login')">← Đăng nhập</a>
-        </div>
       </div>
 
       <div class="auth-guest">
@@ -1879,41 +1866,47 @@ canvas{display:block;cursor:crosshair}
   <div class="cbracket cbracket-bl"></div>
   <div class="cbracket cbracket-br"></div>
 
-  <!-- User badge góc trên phải -->
-  <div id="user-badge" style="display:none">
-    <span id="user-badge-name"></span>
-    <span id="user-badge-stats"></span>
-    <button id="user-logout-btn" onclick="doLogout()">LOGOUT</button>
-  </div>
+  <!-- Góc trên phải: user badge + nút nhập code xếp dọc, không chồng lên nhau -->
+  <div style="position:absolute;top:18px;right:22px;z-index:20;
+              display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
 
-  <!-- Nhập Code — góc phải dưới user badge -->
-  <div id="code-panel-wrap" style="position:absolute;top:18px;right:22px;z-index:20;display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-    <button id="code-toggle-btn" onclick="toggleCodePanel()" style="
-      padding:5px 14px;font-family:'Black Ops One',cursive;font-size:.58rem;letter-spacing:2px;
-      background:rgba(212,160,23,.1);border:1px solid rgba(212,160,23,.3);
-      color:var(--gold2);cursor:pointer;border-radius:2px;transition:all .2s;
-    " onmouseenter="this.style.background='rgba(212,160,23,.2)'"
-       onmouseleave="this.style.background='rgba(212,160,23,.1)'">
-      🎁 NHẬP CODE
-    </button>
-    <div id="code-panel" style="display:none;flex-direction:column;gap:6px;
-      background:rgba(10,10,28,.96);border:1px solid rgba(212,160,23,.3);
-      padding:12px 14px;border-radius:3px;min-width:220px;
-      box-shadow:0 0 30px rgba(212,160,23,.1);">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:.55rem;letter-spacing:4px;color:var(--gold);margin-bottom:4px;">// NHẬP CODE ĐỔI QUÀ</div>
-      <input id="code-input" type="text" placeholder="Nhập code..."
-        style="width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(212,160,23,.25);
-        color:#fff;font-family:'Black Ops One',cursive;font-size:.75rem;letter-spacing:4px;
-        padding:8px 10px;outline:none;text-transform:uppercase;border-radius:2px;"
-        oninput="this.value=this.value.toUpperCase()"
-        onkeydown="if(event.key==='Enter')redeemCode()">
-      <button onclick="redeemCode()" style="
-        padding:7px 10px;font-family:'Black Ops One',cursive;font-size:.65rem;letter-spacing:2px;
-        background:rgba(212,160,23,.15);border:1px solid rgba(212,160,23,.4);
-        color:var(--gold2);cursor:pointer;border-radius:2px;transition:all .2s;
-      ">✓ ĐỔI NGAY</button>
-      <div id="code-msg" style="font-family:'Share Tech Mono',monospace;font-size:.6rem;min-height:16px;text-align:center;"></div>
+    <!-- User badge -->
+    <div id="user-badge" style="display:none">
+      <span id="user-badge-name"></span>
+      <span id="user-badge-stats"></span>
+      <button id="user-logout-btn" onclick="doLogout()">LOGOUT</button>
     </div>
+
+    <!-- Nhập Code — luôn nằm dưới badge -->
+    <div id="code-panel-wrap" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+      <button id="code-toggle-btn" onclick="toggleCodePanel()" style="
+        padding:5px 14px;font-family:'Black Ops One',cursive;font-size:.58rem;letter-spacing:2px;
+        background:rgba(212,160,23,.1);border:1px solid rgba(212,160,23,.3);
+        color:var(--gold2);cursor:pointer;border-radius:2px;transition:all .2s;
+      " onmouseenter="this.style.background='rgba(212,160,23,.2)'"
+         onmouseleave="this.style.background='rgba(212,160,23,.1)'">
+        🎁 NHẬP CODE
+      </button>
+      <div id="code-panel" style="display:none;flex-direction:column;gap:6px;
+        background:rgba(10,10,28,.96);border:1px solid rgba(212,160,23,.3);
+        padding:12px 14px;border-radius:3px;min-width:220px;
+        box-shadow:0 0 30px rgba(212,160,23,.1);">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.55rem;letter-spacing:4px;color:var(--gold);margin-bottom:4px;">// NHẬP CODE ĐỔI QUÀ</div>
+        <input id="code-input" type="text" placeholder="Nhập code..."
+          style="width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(212,160,23,.25);
+          color:#fff;font-family:'Black Ops One',cursive;font-size:.75rem;letter-spacing:4px;
+          padding:8px 10px;outline:none;text-transform:uppercase;border-radius:2px;"
+          oninput="this.value=this.value.toUpperCase()"
+          onkeydown="if(event.key==='Enter')redeemCode()">
+        <button onclick="redeemCode()" style="
+          padding:7px 10px;font-family:'Black Ops One',cursive;font-size:.65rem;letter-spacing:2px;
+          background:rgba(212,160,23,.15);border:1px solid rgba(212,160,23,.4);
+          color:var(--gold2);cursor:pointer;border-radius:2px;transition:all .2s;
+        ">✓ ĐỔI NGAY</button>
+        <div id="code-msg" style="font-family:'Share Tech Mono',monospace;font-size:.6rem;min-height:16px;text-align:center;"></div>
+      </div>
+    </div>
+
   </div>
 
   <div class="logo-wrap">
@@ -2923,15 +2916,10 @@ function authSetLoading(btnId, loading) {
 function authSwitchTab(tab) {
   document.getElementById('form-login').style.display    = tab==='login'    ? '' : 'none';
   document.getElementById('form-register').style.display = tab==='register' ? '' : 'none';
-  const titleEl = document.getElementById('auth-form-title');
-  if (titleEl) titleEl.textContent = tab === 'login' ? 'ĐĂNG NHẬP' : 'TẠO TÀI KHOẢN';
+  document.getElementById('tab-login').classList.toggle('active',    tab==='login');
+  document.getElementById('tab-register').classList.toggle('active', tab==='register');
   setAuthMsg('login-msg','',false);
   setAuthMsg('reg-msg','',false);
-  // Focus vào input đầu tiên của form vừa hiện
-  const firstInput = tab==='login'
-    ? document.getElementById('login-user')
-    : document.getElementById('reg-user');
-  if (firstInput) setTimeout(() => firstInput.focus(), 50);
 }
 
 // ── Đăng nhập ────────────────────────────────────────────────
@@ -2962,10 +2950,6 @@ async function doRegister() {
   authSetLoading('reg-btn', false);
 
   if (data.error) return setAuthMsg('reg-msg', data.error, true);
-
-  // Lưu username để lần sau tự điền khi đăng nhập lại
-  try { localStorage.setItem('sa_username', data.username || username); } catch(e) {}
-
   setAuthMsg('reg-msg', '✓ Tạo tài khoản thành công!', false);
   setTimeout(() => onAuthSuccess(data), 700);
 }
@@ -2974,7 +2958,6 @@ async function doRegister() {
 function doGuest() {
   currentUser = null;
   localStorage.removeItem('sa_token');
-  // Giữ lại sa_username để lần sau vẫn tự điền nếu quay lại đăng nhập
   updateUserBadge();
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('connecting-screen').classList.remove('show');
@@ -2983,17 +2966,9 @@ function doGuest() {
 
 // ── Đăng xuất ────────────────────────────────────────────────
 function doLogout() {
-  const lastUser = currentUser?.username;
   currentUser = null;
   localStorage.removeItem('sa_token');
-  // Giữ sa_username để form login tự điền sẵn
   updateUserBadge();
-  authSwitchTab('login');
-  if (lastUser) {
-    const el = document.getElementById('login-user');
-    if (el) el.value = lastUser;
-    setTimeout(() => { const p = document.getElementById('login-pass'); if(p) p.focus(); }, 80);
-  }
   showAuthScreen();
 }
 
@@ -3001,8 +2976,6 @@ function doLogout() {
 function onAuthSuccess(data) {
   currentUser = { username: data.username, token: data.token, stats: data.stats };
   localStorage.setItem('sa_token', data.token);
-  // Lưu username để lần sau tự điền
-  try { localStorage.setItem('sa_username', data.username); } catch(e) {}
   if (data.campProgress) campProgress = data.campProgress;
   if (data.token) {
     apiCall('GET', '/api/shop', null, data.token).then(r => {
@@ -3091,23 +3064,8 @@ function syncGameResult(won) {
 let _authInitDone = false; // flag: đã xử lý auto-login xong chưa
 
 async function tryAutoLogin() {
-  const token    = localStorage.getItem('sa_token');
-  const savedUser = localStorage.getItem('sa_username');
-
+  const token = localStorage.getItem('sa_token');
   if (!token) {
-    // Chưa bao giờ đăng nhập/đăng ký
-    if (savedUser) {
-      // Đã đăng ký trước đây nhưng mất token → hiện form login với username điền sẵn
-      authSwitchTab('login');
-      const loginInput = document.getElementById('login-user');
-      if (loginInput) { loginInput.value = savedUser; }
-      const passInput = document.getElementById('login-pass');
-      if (passInput) setTimeout(() => passInput.focus(), 80);
-      setAuthMsg('login-msg', '⚡ Chào lại ' + savedUser + '! Nhập mật khẩu để tiếp tục.', false);
-    } else {
-      // Người mới → hiện form đăng ký
-      authSwitchTab('register');
-    }
     document.getElementById('auth-screen').classList.remove('hidden');
     return;
   }
@@ -3160,9 +3118,6 @@ async function tryAutoLogin() {
     // Timeout / lỗi mạng → ẩn connecting, hiện auth với thông báo
     _doneConnecting();
     authScreen.classList.remove('hidden');
-    authSwitchTab('login');
-    const _su = localStorage.getItem('sa_username');
-    if (_su) { const el = document.getElementById('login-user'); if(el) el.value = _su; }
     setAuthMsg('login-msg', '⚠ Server chưa phản hồi, vui lòng đăng nhập thủ công', true);
     const loginBtn = document.getElementById('login-btn');
     if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = 'ĐĂNG NHẬP'; }
@@ -3173,14 +3128,6 @@ async function tryAutoLogin() {
     _doneConnecting();
     localStorage.removeItem('sa_token');
     authScreen.classList.remove('hidden');
-    authSwitchTab('login');
-    // Điền sẵn username nếu có
-    const savedUser2 = localStorage.getItem('sa_username');
-    if (savedUser2) {
-      const loginInput = document.getElementById('login-user');
-      if (loginInput) { loginInput.value = savedUser2; }
-      setTimeout(() => { const p = document.getElementById('login-pass'); if(p) p.focus(); }, 80);
-    }
     setAuthMsg('login-msg', 'Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', true);
     return;
   }
