@@ -93,12 +93,24 @@ const httpServer = http.createServer(async (req,res) => {
     const key = username.toLowerCase();
     if (db[key]) return json(res,409,{error:'Tên đăng nhập đã tồn tại'});
 
-    db[key] = { username, password:hashPw(password), createdAt:Date.now(),
-                campProgress:{cleared:[]}, stats:{wins:0,losses:0} };
+    db[key] = {
+      username,
+      password: hashPw(password),
+      createdAt: Date.now(),
+      campProgress: { cleared: [] },
+      stats: { wins: 0, losses: 0 },
+      shopData: {
+        coins: 0,
+        owned: [],
+        equipped: { skins: {}, perks: [] },
+        usedCodes: [],
+        bulletFire: 0
+      }
+    };
     saveUsers(db);
     const token = signToken({username});
     console.log(`[REGISTER] ${username}`);
-    return json(res,201,{token, username, campProgress:db[key].campProgress, stats:db[key].stats});
+    return json(res,201,{token, username, campProgress:db[key].campProgress, stats:db[key].stats, shopData:db[key].shopData});
   }
 
   // POST /api/login
@@ -167,7 +179,14 @@ const httpServer = http.createServer(async (req,res) => {
     const db = loadUsers();
     const user = db[p.username.toLowerCase()];
     if (!user) return json(res,404,{error:'User not found'});
-    user.shopData = shopData;
+    // Bảo vệ server-side: giữ lại usedCodes từ DB, không để client ghi đè
+    const prevUsedCodes = user.shopData?.usedCodes || [];
+    const clientUsedCodes = shopData?.usedCodes || [];
+    const mergedUsedCodes = [...new Set([...prevUsedCodes, ...clientUsedCodes])];
+    user.shopData = {
+      ...shopData,
+      usedCodes: mergedUsedCodes
+    };
     saveUsers(db);
     return json(res,200,{ok:true});
   }
@@ -179,7 +198,12 @@ const httpServer = http.createServer(async (req,res) => {
     const db = loadUsers();
     const user = db[p.username.toLowerCase()];
     if (!user) return json(res,404,{error:'User not found'});
-    return json(res,200,{shopData: user.shopData || null});
+    // Trả về shopData mặc định nếu chưa có
+    const shopData = user.shopData || {
+      coins: 0, owned: [], equipped: { skins: {}, perks: [] },
+      usedCodes: [], bulletFire: 0
+    };
+    return json(res,200,{shopData});
   }
 
   // GET /api/leaderboard — top players by mode
@@ -193,7 +217,7 @@ const httpServer = http.createServer(async (req,res) => {
       practice: { wins: u.stats?.practice?.wins||0, losses: u.stats?.practice?.losses||0 },
       coins:  u.shopData?.coins || 0,
     }));
-    const active = players; // Hiển thị tất cả người dùng đã đăng ký
+    const active = players.filter(p => p.total.wins + p.total.losses > 0);
     return json(res, 200, { players: active });
   }
 
