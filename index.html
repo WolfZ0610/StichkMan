@@ -4397,7 +4397,47 @@ function handleMsg(d){
       setObjStatus('jr-status','❌ Lỗi: '+d.msg,'var(--red)');
       setObjStatus('qm-status','❌ '+d.msg,'var(--red)');
       break;
+
+    case 'admin_kick':
+      if(running) endGame('draw');
+      (function(){
+        var ols=document.getElementById('online-screen');
+        if(ols&&!ols.classList.contains('hidden')){
+          ols.classList.add('hidden');
+          document.getElementById('menu-screen').classList.remove('hidden');
+        }
+      })();
+      hienCanhBaoAdmin('⚠ ADMIN ĐÃ KẾT THÚC TRẦN ĐẔU', d.reason||'Quản trị viên đã kết thúc phòng này.', '#ff8c00');
+      break;
+
+    case 'banned':
+      running=false;
+      localStorage.removeItem('token');
+      localStorage.removeItem('username');
+      ['online-screen','char-screen','campaign-screen','practice-screen'].forEach(function(id){
+        var el=document.getElementById(id); if(el)el.classList.add('hidden');
+      });
+      document.getElementById('menu-screen').classList.add('hidden');
+      var _as=document.getElementById('auth-screen'); if(_as)_as.classList.remove('hidden');
+      if(ws){ws.onclose=null;ws.close();ws=null;}
+      hienCanhBaoAdmin('🚫 TÀI KHOẢN BỊ CẤM', d.reason||'Tài khoản của bạn đã bị quản trị viên khóa.', '#ff1a3a');
+      break;
+
+    case 'admin_invite':
+      hienCanhBaoAdmin('📨 LỜI MỜI TỪ ADMIN', 'Bạn được mời vào phòng: '+d.roomId+'. Vào Online → Nhập Mã → nhập "'+d.roomId+'"', '#f5c842');
+      break;
   }
+}
+
+function hienCanhBaoAdmin(tieuDe, noiDung, mauVien) {
+  var cu=document.getElementById('hop-cbao-admin'); if(cu)cu.remove();
+  var hop=document.createElement('div');
+  hop.id='hop-cbao-admin';
+  hop.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-60%);z-index:9999;padding:36px 44px;text-align:center;background:linear-gradient(135deg,rgba(4,4,12,.98),rgba(8,8,21,.97));border:2px solid '+mauVien+';clip-path:polygon(20px 0,100% 0,calc(100% - 20px) 100%,0 100%);font-family:Rajdhani,sans-serif;box-shadow:0 0 60px '+mauVien+'44;animation:hienHopAdmin .35s cubic-bezier(.16,1,.3,1) both;min-width:340px;max-width:460px;';
+  hop.innerHTML='<div style="font-family:\'Share Tech Mono\',monospace;font-size:.6rem;letter-spacing:6px;color:'+mauVien+';margin-bottom:12px;opacity:.8">THÔNG BÁO HỆ THỐNG</div><div style="font-family:\'Black Ops One\',cursive;font-size:1.5rem;color:'+mauVien+';letter-spacing:3px;margin-bottom:10px">'+tieuDe+'</div><div style="font-size:.95rem;color:rgba(255,255,255,.8);line-height:1.6;margin-bottom:22px">'+noiDung+'</div><button onclick="document.getElementById(\'hop-cbao-admin\').remove()" style="padding:10px 26px;cursor:pointer;font-family:\'Black Ops One\',cursive;font-size:.82rem;letter-spacing:3px;border:1px solid '+mauVien+';background:rgba(255,255,255,.05);color:'+mauVien+';clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%)">ĐÃ HIẾU</button>';
+  if(!document.getElementById('st-hop-admin')){var s=document.createElement('style');s.id='st-hop-admin';s.textContent='@keyframes hienHopAdmin{from{opacity:0;transform:translate(-50%,-60%) scale(.88)}to{opacity:1;transform:translate(-50%,-60%) scale(1)}}';document.head.appendChild(s);}
+  document.body.appendChild(hop);
+  if(mauVien!=='#ff1a3a')setTimeout(function(){if(hop.parentNode)hop.remove();},8000);
 }
 
 // ── Điều hướng ──

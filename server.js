@@ -344,12 +344,13 @@ const httpServer = http.createServer(async (req,res) => {
     if(ban) {
       wss.clients.forEach(ws=>{
         if(ws.username?.toLowerCase()===username.toLowerCase()) {
-          ws.send(JSON.stringify({type:'banned',reason:'Your account has been banned by admin'}));
-          ws.terminate();
+          ws.send(JSON.stringify({type:'banned',reason:'Tài khoản của bạn đã bị quản trị viên khóa.'}));
+          if(ws.roomId) cleanupRoom(ws.roomId, ws);
+          setTimeout(()=>ws.terminate(), 500); // Đợi client nhận message
         }
       });
     }
-    console.log(`[ADMIN] ${ban?'Banned':'Unbanned'}: ${username}`);
+    console.log(`[ADMIN] ${ban?'[CẤM]':'[BỎ CẤM]'}: ${username}`);
     return json(res,200,{ok:true});
   }
 
