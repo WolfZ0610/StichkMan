@@ -1357,9 +1357,9 @@ canvas{display:block;cursor:crosshair}
   transition:color .2s;
 }
 .auth-guest a:hover{color:#fff;}
-/* User badge in menu */
+/* User badge in menu — góc trên TRÁI */
 #user-badge{
-  position:absolute;top:18px;right:22px;z-index:10;
+  position:absolute;top:18px;left:22px;z-index:10;
   display:flex;align-items:center;gap:10px;
   font-family:'Share Tech Mono',monospace;font-size:.72rem;letter-spacing:.05em;
 }
@@ -1874,8 +1874,27 @@ canvas{display:block;cursor:crosshair}
     <button id="user-logout-btn" onclick="doLogout()">LOGOUT</button>
   </div>
 
-  <!-- Nhập Code — góc phải dưới user badge -->
-  <div id="code-panel-wrap" style="position:absolute;top:18px;right:22px;z-index:20;display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+  <!-- Nhập Code — góc dưới PHẢI (tách khỏi user-badge ở trên trái) -->
+  <div id="code-panel-wrap" style="position:absolute;bottom:70px;right:22px;z-index:20;display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+    <div id="code-panel" style="display:none;flex-direction:column;gap:6px;
+      background:rgba(10,10,28,.97);border:1px solid rgba(212,160,23,.35);
+      padding:14px 16px;border-radius:3px;min-width:230px;
+      box-shadow:0 -4px 40px rgba(0,0,0,.5),0 0 20px rgba(212,160,23,.08);">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:.55rem;letter-spacing:4px;color:var(--gold);margin-bottom:4px;">// NHẬP CODE ĐỔI QUÀ</div>
+      <input id="code-input" type="text" placeholder="Nhập code..."
+        style="width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(212,160,23,.25);
+        color:#fff;font-family:'Black Ops One',cursive;font-size:.75rem;letter-spacing:4px;
+        padding:8px 10px;outline:none;text-transform:uppercase;border-radius:2px;box-sizing:border-box;"
+        oninput="this.value=this.value.toUpperCase()"
+        onkeydown="if(event.key==='Enter')redeemCode()">
+      <button onclick="redeemCode()" style="
+        padding:7px 10px;font-family:'Black Ops One',cursive;font-size:.65rem;letter-spacing:2px;
+        background:rgba(212,160,23,.15);border:1px solid rgba(212,160,23,.4);
+        color:var(--gold2);cursor:pointer;border-radius:2px;transition:all .2s;
+      " onmouseenter="this.style.background='rgba(212,160,23,.28)'"
+         onmouseleave="this.style.background='rgba(212,160,23,.15)'">✓ ĐỔI NGAY</button>
+      <div id="code-msg" style="font-family:'Share Tech Mono',monospace;font-size:.6rem;min-height:16px;text-align:center;"></div>
+    </div>
     <button id="code-toggle-btn" onclick="toggleCodePanel()" style="
       padding:5px 14px;font-family:'Black Ops One',cursive;font-size:.58rem;letter-spacing:2px;
       background:rgba(212,160,23,.1);border:1px solid rgba(212,160,23,.3);
@@ -1884,24 +1903,6 @@ canvas{display:block;cursor:crosshair}
        onmouseleave="this.style.background='rgba(212,160,23,.1)'">
       🎁 NHẬP CODE
     </button>
-    <div id="code-panel" style="display:none;flex-direction:column;gap:6px;
-      background:rgba(10,10,28,.96);border:1px solid rgba(212,160,23,.3);
-      padding:12px 14px;border-radius:3px;min-width:220px;
-      box-shadow:0 0 30px rgba(212,160,23,.1);">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:.55rem;letter-spacing:4px;color:var(--gold);margin-bottom:4px;">// NHẬP CODE ĐỔI QUÀ</div>
-      <input id="code-input" type="text" placeholder="Nhập code..."
-        style="width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(212,160,23,.25);
-        color:#fff;font-family:'Black Ops One',cursive;font-size:.75rem;letter-spacing:4px;
-        padding:8px 10px;outline:none;text-transform:uppercase;border-radius:2px;"
-        oninput="this.value=this.value.toUpperCase()"
-        onkeydown="if(event.key==='Enter')redeemCode()">
-      <button onclick="redeemCode()" style="
-        padding:7px 10px;font-family:'Black Ops One',cursive;font-size:.65rem;letter-spacing:2px;
-        background:rgba(212,160,23,.15);border:1px solid rgba(212,160,23,.4);
-        color:var(--gold2);cursor:pointer;border-radius:2px;transition:all .2s;
-      ">✓ ĐỔI NGAY</button>
-      <div id="code-msg" style="font-family:'Share Tech Mono',monospace;font-size:.6rem;min-height:16px;text-align:center;"></div>
-    </div>
   </div>
 
   <div class="logo-wrap">
@@ -2963,18 +2964,39 @@ function doGuest() {
 function doLogout() {
   currentUser = null;
   localStorage.removeItem('sa_token');
+
+  // Reset toàn bộ state runtime — không lẫn data sang account khác
+  playerCoins      = 0;
+  ownedItems       = new Set();
+  equippedItems    = {};
+  campProgress     = { cleared: [] };
+  usedCodes        = [];       // reset per-account codes
+  hasBulletFireSkin = false;   // reset per-account skin
+  initDefaultOwned();
+  updateCoinUI();
   updateUserBadge();
   showAuthScreen();
 }
 
 // ── Sau khi auth thành công ───────────────────────────────────
 function onAuthSuccess(data) {
+  // Reset TOÀN BỘ state user cũ trước — tránh lẫn data giữa các tài khoản
+  playerCoins      = 0;
+  ownedItems       = new Set();
+  equippedItems    = {};
+  campProgress     = { cleared: [] };
+  usedCodes        = [];
+  hasBulletFireSkin = false;
+  initDefaultOwned();
+
   currentUser = { username: data.username, token: data.token, stats: data.stats };
   localStorage.setItem('sa_token', data.token);
   if (data.campProgress) campProgress = data.campProgress;
+
+  // Load shopData từ server → coinLoad sẽ khôi phục coins, items, usedCodes, bulletSkin
   if (data.token) {
     apiCall('GET', '/api/shop', null, data.token).then(r => {
-      if (r.shopData) coinLoad(r.shopData); else coinLoad(null);
+      coinLoad(r?.shopData || null);
     });
   }
   updateUserBadge();
@@ -3141,8 +3163,13 @@ async function tryAutoLogin() {
 
   currentUser = { username: data.username, token, stats: data.stats };
   if (data.campProgress) campProgress = data.campProgress;
+  else campProgress = { cleared: [] };
+  // Reset shop state + per-account data trước khi load từ server
+  playerCoins = 0; ownedItems = new Set(); equippedItems = {};
+  usedCodes = []; hasBulletFireSkin = false;
+  initDefaultOwned();
   apiCall('GET', '/api/shop', null, token).then(r => {
-    if (r.shopData) coinLoad(r.shopData); else coinLoad(null);
+    coinLoad(r?.shopData || null);
   });
   updateUserBadge();
   // Chỉ vào menu nếu không có màn hình gameplay nào đang mở
@@ -3282,30 +3309,44 @@ function initDefaultOwned() {
 
 // ── Lưu / Load coin ──────────────────────────────────────────
 function coinSave() {
-  const data = { coins: playerCoins, owned: [...ownedItems], equipped: equippedItems,
-                 usedCodes: usedCodes, bulletFire: hasBulletFireSkin ? 1 : 0 };
-  try { localStorage.setItem('sa_shop', JSON.stringify(data)); } catch {}
+  // usedCodes + hasBulletFireSkin lưu TRONG shopData → mỗi tài khoản riêng
+  const data = {
+    coins: playerCoins,
+    owned: [...ownedItems],
+    equipped: equippedItems,
+    usedCodes: [...usedCodes],
+    hasBulletFireSkin
+  };
+  // Lưu server nếu đã login
   if (currentUser?.token) {
     apiCall('POST', '/api/shop', { shopData: data }, currentUser.token);
   }
+  // Lưu localStorage với key riêng theo từng username (cache offline / fallback)
+  const lsKey = currentUser ? 'sa_shop_' + currentUser.username.toLowerCase() : 'sa_shop_guest';
+  try { localStorage.setItem(lsKey, JSON.stringify(data)); } catch {}
 }
-function coinLoad(data) {
-  if (!data) {
-    if (currentUser?.token) {
-      // Đã đăng nhập → KHÔNG đọc localStorage, đợi server trả về
-      initDefaultOwned(); updateCoinUI(); return;
-    }
-    try { const d = localStorage.getItem('sa_shop'); if(d) data = JSON.parse(d); } catch {}
+function coinLoad(serverData) {
+  let data = serverData;
+
+  // Nếu server không có data (user mới hoặc lỗi mạng) → thử localStorage per-user làm fallback
+  if (!data && currentUser) {
+    try {
+      const d = localStorage.getItem('sa_shop_' + currentUser.username.toLowerCase());
+      if (d) data = JSON.parse(d);
+    } catch {}
   }
+  // Guest → đọc slot guest
+  if (!data && !currentUser) {
+    try { const d = localStorage.getItem('sa_shop_guest'); if(d) data = JSON.parse(d); } catch {}
+  }
+
   if (data) {
     playerCoins   = data.coins   || 0;
     ownedItems    = new Set(data.owned || []);
     equippedItems = data.equipped || {};
-    // Load usedCodes và bulletFire từ server — KHÔNG dùng localStorage
-    if (currentUser?.token) {
-      usedCodes = Array.isArray(data.usedCodes) ? data.usedCodes : [];
-      hasBulletFireSkin = data.bulletFire === 1;
-    }
+    // Khôi phục per-account: danh sách code đã dùng & skin lửa
+    if (Array.isArray(data.usedCodes))   usedCodes = data.usedCodes;
+    if (data.hasBulletFireSkin === true) hasBulletFireSkin = true;
   }
   initDefaultOwned();
   updateCoinUI();
@@ -3588,7 +3629,8 @@ coinLoad();
 // ══════════════════════════════════════════
 // CODE ĐỔI QUÀ
 // ══════════════════════════════════════════
-// usedCodes và hasBulletFireSkin gắn với tài khoản server, KHÔNG dùng localStorage
+// usedCodes và hasBulletFireSkin được lưu trong shopData (per-account)
+// KHÔNG đọc từ global localStorage nữa — sẽ được coinLoad() khôi phục
 let usedCodes = [];
 let hasBulletFireSkin = false;
 
@@ -3614,12 +3656,6 @@ function redeemCode() {
   const code = input.value.trim().toUpperCase();
   if (!code) return;
 
-  if (!currentUser?.token) {
-    msgEl.textContent = '⚠ Bạn cần đăng nhập để nhập code!';
-    msgEl.style.color = 'var(--amber)';
-    return;
-  }
-
   if (usedCodes.includes(code)) {
     msgEl.textContent = '⚠ Code đã được dùng rồi!';
     msgEl.style.color = 'var(--amber)';
@@ -3635,14 +3671,12 @@ function redeemCode() {
   }
 
   usedCodes.push(code);
-  // Lưu lên server ngay — gắn với tài khoản, không dùng localStorage
-  coinSave();
-
+  // Lưu vào shopData (per-account) thay vì global localStorage
   if (gift.type === 'coins') {
-    addCoins(gift.amount, 'Code Gift');
+    addCoins(gift.amount, 'Code Gift'); // addCoins tự gọi coinSave
   } else if (gift.type === 'bulletSkin') {
     hasBulletFireSkin = true;
-    coinSave();
+    coinSave(); // lưu hasBulletFireSkin vào shopData
   }
 
   msgEl.textContent = gift.msg;
