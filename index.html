@@ -2886,6 +2886,15 @@ async function apiCall(method, endpoint, body, token) {
     const r = await fetch(API_BASE + endpoint, opts);
     if (!r.ok && r.status === 404) return { error: 'Server không hỗ trợ API' };
     const data = await r.json();
+    // Nếu bị cấm (403) → buộc đăng xuất ngay
+    if (r.status === 403) {
+      localStorage.removeItem('sa_token');
+      localStorage.removeItem('sa_username');
+      document.querySelectorAll('.screen:not(#auth-screen)').forEach(s => s.classList.add('hidden'));
+      const as2 = document.getElementById('auth-screen');
+      if (as2) { as2.classList.remove('hidden'); }
+      setTimeout(() => setAuthMsg('login-msg', '🚫 Tài khoản bị khóa. Liên hệ quản trị viên.', true), 100);
+    }
     return data;
   } catch {
     return { error: 'Không thể kết nối server' };
@@ -3141,11 +3150,17 @@ async function tryAutoLogin() {
     return;
   }
 
-  if (status === 401) {
+  if (status === 401 || status === 403) {
     _doneConnecting();
     localStorage.removeItem('sa_token');
+    localStorage.removeItem('sa_username');
     authScreen.classList.remove('hidden');
-    setAuthMsg('login-msg', 'Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', true);
+    if (status === 403) {
+      // Tài khoản bị cấm
+      setAuthMsg('login-msg', '🚫 Tài khoản bị khóa. Vui lòng liên hệ quản trị viên.', true);
+    } else {
+      setAuthMsg('login-msg', 'Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', true);
+    }
     return;
   }
 

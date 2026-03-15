@@ -97,12 +97,26 @@ function getToken(req) {
   return (req.headers.authorization||'').replace('Bearer ','');
 }
 
+// Kiểm tra token hợp lệ VÀ tài khoản không bị cấm
+function verifyUserToken(req) {
+  const p = verifyToken(getToken(req));
+  if (!p) return null;
+  const db = loadUsers();
+  const user = db[p.username.toLowerCase()];
+  if (!user || user.banned) return null; // Chặn nếu bị cấm
+  return p;
+}
+
 // ── HTTP Server ───────────────────────────────────────
 const httpServer = http.createServer(async (req,res) => {
   const url = req.url.split('?')[0];
 
   if (req.method==='OPTIONS') {
-    res.writeHead(204,{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Content-Type,Authorization'});
+    res.writeHead(204,{
+      'Access-Control-Allow-Origin':'*',
+      'Access-Control-Allow-Headers':'Content-Type,Authorization',
+      'Access-Control-Allow-Methods':'GET,POST,PUT,DELETE,OPTIONS'
+    });
     return res.end();
   }
 
@@ -151,17 +165,18 @@ const httpServer = http.createServer(async (req,res) => {
 
   // GET /api/me
   if (req.method==='GET' && url==='/api/me') {
-    const p = verifyToken(getToken(req));
+    const p = verifyUserToken(req); // Tự động chặn nếu bị cấm
     if (!p) return json(res,401,{error:'Unauthorized'});
     const db = loadUsers();
     const user = db[p.username.toLowerCase()];
     if (!user) return json(res,404,{error:'User not found'});
+    if (user.banned) return json(res,403,{error:'Tài khoản bị khóa. Liên hệ admin.'});
     return json(res,200,{username:user.username, campProgress:user.campProgress, stats:user.stats});
   }
 
   // POST /api/progress  — sync campaign
   if (req.method==='POST' && url==='/api/progress') {
-    const p = verifyToken(getToken(req));
+    const p = verifyUserToken(req);
     if (!p) return json(res,401,{error:'Unauthorized'});
     const {campProgress} = await parseBody(req);
     const db = loadUsers();
@@ -174,7 +189,7 @@ const httpServer = http.createServer(async (req,res) => {
 
   // POST /api/stats  — ghi kết quả trận
   if (req.method==='POST' && url==='/api/stats') {
-    const p = verifyToken(getToken(req));
+    const p = verifyUserToken(req);
     if (!p) return json(res,401,{error:'Unauthorized'});
     const {result, mode} = await parseBody(req); // result: 'win'|'loss', mode: 'online'|'campaign'|'practice'
     const db = loadUsers();
@@ -197,7 +212,7 @@ const httpServer = http.createServer(async (req,res) => {
 
   // POST /api/shop — lưu coin + owned items
   if (req.method==='POST' && url==='/api/shop') {
-    const p = verifyToken(getToken(req));
+    const p = verifyUserToken(req);
     if (!p) return json(res,401,{error:'Unauthorized'});
     const {shopData} = await parseBody(req);
     const db = loadUsers();
@@ -210,7 +225,7 @@ const httpServer = http.createServer(async (req,res) => {
 
   // GET /api/shop
   if (req.method==='GET' && url==='/api/shop') {
-    const p = verifyToken(getToken(req));
+    const p = verifyUserToken(req);
     if (!p) return json(res,401,{error:'Unauthorized'});
     const db = loadUsers();
     const user = db[p.username.toLowerCase()];
