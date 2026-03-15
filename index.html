@@ -4661,7 +4661,10 @@ function startGame(init=null){
     shb.style.display='none';
     aib.style.display=isOnline?'none':'block';
   }
-  bullets=[];effects=[];dmgNumbers=[];running=true;paused=false;gameLoop();
+  bullets=[];effects=[];dmgNumbers=[];running=true;paused=false;
+  NaiveBayes.reset(); // Reset Naive Bayes khi bắt đầu trận mới
+  const nbEl=document.getElementById('nb-hud'); if(nbEl) nbEl.style.display='none';
+  gameLoop();
   if(_itemSpawnInterval){clearInterval(_itemSpawnInterval);_itemSpawnInterval=null;}
   if(!isOnline) _itemSpawnInterval=setInterval(()=>{if(running)spawnItem(Math.random()>.5?'HP':'AMMO');},7000);
 
@@ -5279,6 +5282,264 @@ function simulatedAnneal(bot){
   return bDir;
 }
 
+// ══════════════════════════════════════════════════════════════
+// THUẬT TOÁN MỚI 1: NAIVE BAYES — Phân loại phong cách đối thủ
+// Quan sát hành vi player mỗi 20 frames → phân loại 3 kiểu:
+//   aggressive (hung hãng) | defensive (phòng thủ) | sniper (bắn tỉa)
+// Sau đó điều chỉnh chiến thuật bot cho phù hợp
+// ══════════════════════════════════════════════════════════════
+const NaiveBayes = (() => {
+  const CLASSES = ['aggressive', 'defensive', 'sniper'];
+
+  // P(feature | class) — Phân phối Gaussian {mean, std}
+  // Được xác định từ kiến thức về phong cách chơi trong game
+  const LIKELIHOOD = {
+    aggressive: {
+      moveRate:  { mean: 0.85, std: 0.12 }, // di chuyển liên tục
+      shootRate: { mean: 0.72, std: 0.14 }, // bắn nhiều
+      avgDist:   { mean: 200,  std: 70  },  // tiếp cận sát
+      coverTime: { mean: 0.08, std: 0.07 }, // ít ẩn nấp
+    },
+    defensive: {
+      moveRate:  { mean: 0.45, std: 0.15 },
+      shootRate: { mean: 0.35, std: 0.14 },
+      avgDist:   { mean: 380,  std: 100 },  // giữ khoảng cách
+      coverTime: { mean: 0.65, std: 0.14 }, // ẩn nấp nhiều
+    },
+    sniper: {
+      moveRate:  { mean: 0.18, std: 0.10 }, // hầu như đứng yên
+      shootRate: { mean: 0.22, std: 0.10 }, // bắn ít nhưng chính xác
+      avgDist:   { mean: 520,  std: 130 },  // xa nhất có thể
+      coverTime: { mean: 0.38, std: 0.14 },
+    },
+  };
+  const PRIORS = { aggressive: 1/3, defensive: 1/3, sniper: 1/3 };
+
+  // Gaussian PDF
+  function gPDF(x, m, s) {
+    return Math.exp(-0.5 * ((x - m) / s) ** 2) / (s * 2.5066) + 1e-9;
+  }
+
+  let observations = [], playerStyle = 'aggressive';
+  let prevPos = null, shotF = 0, obsF = 0;
+  let _nbHudTimer = 0;
+
+  function classify() {
+    if (observations.length < 6) return;
+    const n  = observations.length;
+    const mr = observations.reduce((s,o)=>s+o.moved, 0) / n;
+    const sr = observations.reduce((s,o)=>s+o.shot,  0) / n;
+    const ad = observations.reduce((s,o)=>s+o.dist,  0) / n;
+    const ct = observations.reduce((s,o)=>s+o.cover, 0) / n;
+    let best = '', bestScore = -Infinity;
+    for (const cls of CLASSES) {
+      const L = LIKELIHOOD[cls];
+      const lp = Math.log(PRIORS[cls])
+        + Math.log(gPDF(mr, L.moveRate.mean,  L.moveRate.std))
+        + Math.log(gPDF(sr, L.shootRate.mean, L.shootRate.std))
+        + Math.log(gPDF(ad, L.avgDist.mean,   L.avgDist.std))
+        + Math.log(gPDF(ct, L.coverTime.mean, L.coverTime.std));
+      if (lp > bestScore) { bestScore = lp; best = cls; }
+    }
+    if (best !== playerStyle) {
+      console.log(`[Naive Bayes] Style thay đổi: ${playerStyle} → ${best}`);
+      playerStyle = best;
+    }
+    // Cập nhật HUD
+    _nbHudTimer++;
+    updateNBHud();
+  }
+
+  return {
+    get style() { return playerStyle; },
+    get obsCount() { return observations.length; },
+
+    observe(player, bot, obstacles) {
+      obsF++;
+      // Đếm shot: được gọi từ aiShootAt
+      const moved = prevPos ? Math.hypot(player.x-prevPos.x, player.y-prevPos.y) > 6 : false;
+
+      if (obsF < 20) { if (moved) {} prevPos = {x:player.x,y:player.y}; return; }
+
+      const dist = Math.hypot(player.x - bot.x, player.y - bot.y);
+      let cover = false;
+      for (const o of obstacles) {
+        if (Math.hypot(player.x+TS/2 - o.x-o.w/2, player.y+TS/2 - o.y-o.h/2) < 75) { cover=true; break; }
+      }
+      observations.push({ moved: moved?1:0, shot: shotF/obsF, dist, cover: cover?1:0 });
+      if (observations.length > 25) observations.shift();
+      prevPos = {x:player.x, y:player.y};
+      shotF = 0; obsF = 0;
+      classify();
+    },
+
+    noteShot() { shotF++; },
+
+    reset() { observations=[]; playerStyle='aggressive'; prevPos=null; shotF=0; obsF=0; },
+
+    // Config chiến thuật bot ứng với mỗi style
+    config() {
+      return {
+        aggressive: { preferDist:160, fireThresh:0.75 }, // rush lại, bắn sớm
+        defensive:  { preferDist:300, fireThresh:1.10 }, // giữ khoảng, chờ thời điểm
+        sniper:     { preferDist:130, fireThresh:0.65 }, // rush sát sniper, bắn liên tục
+      }[playerStyle];
+    },
+  };
+})();
+
+function updateNBHud() {
+  let el = document.getElementById('nb-hud');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'nb-hud';
+    el.style.cssText = `position:fixed;bottom:70px;left:50%;transform:translateX(-50%);
+      font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:3px;
+      padding:5px 18px;border:1px solid;z-index:999;pointer-events:none;
+      background:rgba(0,0,0,.7);opacity:.85;`;
+    document.body.appendChild(el);
+  }
+  const style = NaiveBayes.style;
+  const cols = { aggressive:'#ff5c75', defensive:'#00d4ff', sniper:'#f5c842' };
+  const labels = { aggressive:'⚔ AGGRESSIVE', defensive:'🛡 DEFENSIVE', sniper:'🎯 SNIPER' };
+  el.style.color = cols[style];
+  el.style.borderColor = cols[style];
+  el.textContent = `AI READS: ${labels[style]} (${NaiveBayes.obsCount} obs)`;
+  el.style.display = (typeof running!=='undefined'&&running&&!isOnline) ? 'block' : 'none';
+}
+
+// ══════════════════════════════════════════════════════════════
+// THUẬT TOÁN MỚI 2: ALPHA-BETA PRUNING — Quyết định chiến thuật
+// Minimax 2-ply: Bot(MAX) chọn action → Player(MIN) phản ứng
+// Alpha-Beta cắt tỉa những nhánh không ảnh hưởng kết quả
+//
+// Cấu trúc cây (depth=2):
+//   Bot pick 1 trong 8 actions
+//   └─ Player pick 1 trong 3 reactions  ← cắt ngay nếu α≥β
+//      └─ evaluate() → score
+//
+// Kết quả: chọn action cho bot, trả về có bắn hay không
+// ══════════════════════════════════════════════════════════════
+const AlphaBeta = (() => {
+  // 8 hành động của bot
+  const BOT_ACTIONS = [
+    { name:'stay+shoot',     ddx: 0, ddy: 0,  fire:true  },
+    { name:'advance+shoot',  ddx: 1, ddy: 0,  fire:true  },
+    { name:'retreat+shoot',  ddx:-1, ddy: 0,  fire:true  },
+    { name:'strafe_r+shoot', ddx: 0, ddy: 1,  fire:true  },
+    { name:'strafe_l+shoot', ddx: 0, ddy:-1,  fire:true  },
+    { name:'advance+wait',   ddx: 1, ddy: 0,  fire:false },
+    { name:'retreat+wait',   ddx:-1, ddy: 0,  fire:false },
+    { name:'cover+wait',     ddx: 0, ddy: 1,  fire:false },
+  ];
+
+  // 3 phản ứng dự đoán của player
+  const PLR_REACTIONS = [
+    { ddx: 1, ddy: 0 }, // tiến về bot
+    { ddx:-1, ddy: 0 }, // lùi khỏi bot
+    { ddx: 0, ddy: 1 }, // né ngang
+  ];
+
+  let _cuts = 0, _calls = 0;
+
+  function evaluate(state, preferDist) {
+    const { bx, by, px, py, botHp, plrHp, hasLOS } = state;
+    const dist = Math.hypot(bx-px, by-py);
+    let score = 0;
+
+    // 1. Chênh lệch HP — quan trọng nhất
+    score += (botHp - plrHp) * 4;
+
+    // 2. Khoảng cách lý tưởng (từ Naive Bayes)
+    score -= Math.abs(dist - preferDist) * 0.45;
+
+    // 3. LOS = có thể bắn = lợi thế
+    if (hasLOS) score += 38;
+
+    // 4. Gần cover (obstacle)
+    for (const o of obs) {
+      if (Math.hypot(bx - o.x-o.w/2, by - o.y-o.h/2) < 75) { score += 18; break; }
+    }
+
+    // 5. Phạt khi bị dồn vào tường
+    if (bx < 55 || bx > W-TS-55) score -= 28;
+    if (by < 55 || by > H-TS-55) score -= 28;
+
+    return score;
+  }
+
+  function simulate(state, bAct, pReact) {
+    const STEP = 45;
+    const nbx = Math.max(0, Math.min(W-TS, state.bx + bAct.ddx * STEP));
+    const nby = Math.max(0, Math.min(H-TS, state.by + bAct.ddy * STEP));
+    const npx = Math.max(0, Math.min(W-TS, state.px + pReact.ddx * STEP));
+    const npy = Math.max(0, Math.min(H-TS, state.py + pReact.ddy * STEP));
+    const nHasLOS = los({ x:nbx, y:nby }, { x:npx, y:npy });
+    // Ước lượng sát thương nếu bắn
+    let nPlrHp = state.plrHp;
+    if (bAct.fire && state.hasLOS) nPlrHp = Math.max(0, state.plrHp - 8);
+    return { bx:nbx, by:nby, px:npx, py:npy, botHp:state.botHp, plrHp:nPlrHp, hasLOS:nHasLOS };
+  }
+
+  // Minimax với Alpha-Beta Pruning (depth=2)
+  function abSearch(state, depth, alpha, beta, isMax, preferDist) {
+    _calls++;
+    if (depth === 0) return { score: evaluate(state, preferDist), action: null };
+
+    if (isMax) {
+      // BOT — maximize
+      let best = { score:-Infinity, action: BOT_ACTIONS[0] };
+      for (const bAct of BOT_ACTIONS) {
+        let worstVsThis = Infinity;
+        for (const pReact of PLR_REACTIONS) {
+          const ns = simulate(state, bAct, pReact);
+          const { score } = abSearch(ns, depth-1, alpha, beta, false, preferDist);
+          if (score < worstVsThis) worstVsThis = score;
+          // ✂️ Beta cutoff — player sẽ không chọn phản ứng tệ hơn
+          if (worstVsThis <= alpha) { _cuts++; break; }
+          if (worstVsThis < beta)  beta = worstVsThis;
+        }
+        if (worstVsThis > best.score) { best.score = worstVsThis; best.action = bAct; }
+        // ✂️ Alpha cutoff
+        if (best.score >= beta) { _cuts++; break; }
+        if (best.score > alpha) alpha = best.score;
+      }
+      return best;
+    } else {
+      // PLAYER — minimize
+      let best = { score:Infinity, action: PLR_REACTIONS[0] };
+      for (const pReact of PLR_REACTIONS) {
+        const ns = simulate(state, { ddx:0, ddy:0, fire:false }, pReact);
+        const { score } = abSearch(ns, depth-1, alpha, beta, true, preferDist);
+        if (score < best.score) { best.score = score; best.action = pReact; }
+        if (best.score <= alpha) { _cuts++; break; } // ✂️ Alpha cutoff
+        if (best.score < beta)  beta = best.score;
+      }
+      return best;
+    }
+  }
+
+  return {
+    get cuts()  { return _cuts;  },
+    get calls() { return _calls; },
+
+    decide(bot, tgt, preferDist) {
+      _cuts = 0; _calls = 0;
+      const state = {
+        bx: bot.x, by: bot.y, px: tgt.x, py: tgt.y,
+        botHp: bot.hp, plrHp: tgt.hp,
+        hasLOS: los(bot, tgt),
+      };
+      const result = abSearch(state, 2, -Infinity, Infinity, true, preferDist);
+      // Log thống kê cắt tỉa (mỗi 5 giây)
+      if (Math.random() < 0.02) {
+        console.log(`[Alpha-Beta] Calls:${_calls} Cuts:${_cuts} (${Math.round(_cuts/_calls*100)||0}% pruned) | Action: ${result.action?.name}`);
+      }
+      return result.action;
+    },
+  };
+})();
+
 // ── runAI — phối hợp các thuật toán ──
 let aiTick=0,aiDec={dx:0,dy:0,fire:false};
 let astarPath=null,astarTick=0;
@@ -5292,6 +5553,11 @@ function runAI(bot,tgt){
   const dist=Math.hypot(bot.x-tgt.x,bot.y-tgt.y);
   const lv=los(bot,tgt);
   const hpR=bot.hp/(bot.maxHp||300);
+
+  // ── NAIVE BAYES: Quan sát player mỗi frame ──
+  NaiveBayes.observe(tgt, bot, obs);
+  const nbCfg = NaiveBayes.config();
+  updateNBHud();
 
   // 1. SA né đạn — mỗi frame, nhưng chỉ khi có đạn
   if(cfg.useSA&&bullets.length>0){
@@ -5380,14 +5646,20 @@ function runAI(bot,tgt){
     dir = {dx: Math.sign(W/2 - bot.x), dy: Math.sign(H/2 - bot.y)};
   }
 
-  // Quyết định bắn
-  const fireRange=250*(1+aggr*1.5);
-  aiDec.dx=dir.dx;aiDec.dy=dir.dy;
-  aiDec.fire=lv&&dist<fireRange&&bot.cd<=0&&bot.mag>0&&!bot.reloading;
+  // ── ALPHA-BETA PRUNING: Quyết định bắn thông minh ──
+  // Thay thế: aiDec.fire = lv && dist < fireRange (đơn giản)
+  // Bằng: Minimax 2-ply có cắt tỉa alpha-beta
+  const abAction = AlphaBeta.decide(bot, tgt, nbCfg.preferDist);
+  const shouldFire = abAction.fire && lv && bot.cd<=0 && bot.mag>0 && !bot.reloading;
+
+  // Kết hợp: hướng từ HC/A*/SA, quyết định bắn từ Alpha-Beta
+  aiDec.dx = dir.dx;
+  aiDec.dy = dir.dy;
+  aiDec.fire = shouldFire;
 
   bot.dirX=aiDec.dx;bot.dirY=aiDec.dy;
   move(bot,aiSpd);
-  if(aiDec.fire) aiShootAt(bot,tgt.x,tgt.y);
+  if(aiDec.fire){ NaiveBayes.noteShot(); aiShootAt(bot,tgt.x,tgt.y); }
 }
 
 function updateHUD(){
