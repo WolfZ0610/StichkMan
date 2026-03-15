@@ -12,6 +12,41 @@ const crypto = require('crypto');
 const PORT       = process.env.PORT || 3000;
 const USERS_FILE = path.join(__dirname, 'users.json');
 const SECRET     = process.env.JWT_SECRET || 'stickman_arena_2025_secret';
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'stickman_admin_2025';
+
+// ── Admin DB (flat JSON, same pattern) ───────────────
+const ADMINS_FILE = path.join(__dirname, 'admins.json');
+function loadAdmins() {
+  try { if (fs.existsSync(ADMINS_FILE)) return JSON.parse(fs.readFileSync(ADMINS_FILE,'utf8')); }
+  catch {}
+  // Default admin account
+  const def = {};
+  def['admin'] = { username:'admin', password: hashPwAdmin('admin123'), createdAt: Date.now() };
+  saveAdmins(def);
+  return def;
+}
+function saveAdmins(db) { fs.writeFileSync(ADMINS_FILE, JSON.stringify(db,null,2)); }
+function hashPwAdmin(pw) { return crypto.createHmac('sha256',ADMIN_SECRET).update(pw).digest('hex'); }
+function signAdminToken(payload) {
+  const h=Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url');
+  const b=Buffer.from(JSON.stringify({...payload,iat:Date.now(),admin:true})).toString('base64url');
+  const s=crypto.createHmac('sha256',ADMIN_SECRET).update(`${h}.${b}`).digest('base64url');
+  return `${h}.${b}.${s}`;
+}
+function verifyAdminToken(token) {
+  try {
+    const [h,b,s]=(token||'').split('.');
+    if(!h||!b||!s) return null;
+    const expected=crypto.createHmac('sha256',ADMIN_SECRET).update(`${h}.${b}`).digest('base64url');
+    if(s!==expected) return null;
+    const p=JSON.parse(Buffer.from(b,'base64url').toString());
+    if(!p.admin) return null;
+    if(Date.now()-p.iat>8*60*60*1000) return null; // 8 giờ
+    return p;
+  } catch { return null; }
+}
+function getAdminToken(req) { return (req.headers.authorization||'').replace('Bearer ',''); }
+function isAdmin(req) { return verifyAdminToken(getAdminToken(req)); }
 
 // ── User DB (flat JSON file, không cần DB) ────────────
 function loadUsers() {
@@ -93,24 +128,12 @@ const httpServer = http.createServer(async (req,res) => {
     const key = username.toLowerCase();
     if (db[key]) return json(res,409,{error:'Tên đăng nhập đã tồn tại'});
 
-    db[key] = {
-      username,
-      password: hashPw(password),
-      createdAt: Date.now(),
-      campProgress: { cleared: [] },
-      stats: { wins: 0, losses: 0 },
-      shopData: {
-        coins: 0,
-        owned: [],
-        equipped: { skins: {}, perks: [] },
-        usedCodes: [],
-        bulletFire: 0
-      }
-    };
+    db[key] = { username, password:hashPw(password), createdAt:Date.now(),
+                campProgress:{cleared:[]}, stats:{wins:0,losses:0} };
     saveUsers(db);
     const token = signToken({username});
     console.log(`[REGISTER] ${username}`);
-    return json(res,201,{token, username, campProgress:db[key].campProgress, stats:db[key].stats, shopData:db[key].shopData});
+    return json(res,201,{token, username, campProgress:db[key].campProgress, stats:db[key].stats});
   }
 
   // POST /api/login
@@ -120,6 +143,7 @@ const httpServer = http.createServer(async (req,res) => {
     const db = loadUsers();
     const user = db[username.toLowerCase()];
     if (!user||user.password!==hashPw(password)) return json(res,401,{error:'Sai tên đăng nhập hoặc mật khẩu'});
+    if (user.banned) return json(res,403,{error:'Tài khoản bị khóa. Liên hệ admin.'});
     const token = signToken({username:user.username});
     console.log(`[LOGIN] ${user.username}`);
     return json(res,200,{token, username:user.username, campProgress:user.campProgress, stats:user.stats});
@@ -179,14 +203,7 @@ const httpServer = http.createServer(async (req,res) => {
     const db = loadUsers();
     const user = db[p.username.toLowerCase()];
     if (!user) return json(res,404,{error:'User not found'});
-    // Bảo vệ server-side: giữ lại usedCodes từ DB, không để client ghi đè
-    const prevUsedCodes = user.shopData?.usedCodes || [];
-    const clientUsedCodes = shopData?.usedCodes || [];
-    const mergedUsedCodes = [...new Set([...prevUsedCodes, ...clientUsedCodes])];
-    user.shopData = {
-      ...shopData,
-      usedCodes: mergedUsedCodes
-    };
+    user.shopData = shopData;
     saveUsers(db);
     return json(res,200,{ok:true});
   }
@@ -198,12 +215,7 @@ const httpServer = http.createServer(async (req,res) => {
     const db = loadUsers();
     const user = db[p.username.toLowerCase()];
     if (!user) return json(res,404,{error:'User not found'});
-    // Trả về shopData mặc định nếu chưa có
-    const shopData = user.shopData || {
-      coins: 0, owned: [], equipped: { skins: {}, perks: [] },
-      usedCodes: [], bulletFire: 0
-    };
-    return json(res,200,{shopData});
+    return json(res,200,{shopData: user.shopData || null});
   }
 
   // GET /api/leaderboard — top players by mode
@@ -219,6 +231,191 @@ const httpServer = http.createServer(async (req,res) => {
     }));
     const active = players.filter(p => p.total.wins + p.total.losses > 0);
     return json(res, 200, { players: active });
+  }
+
+  // Serve admin panel
+  if (req.method==='GET' && (url==='/admin'||url==='/admin.html')) {
+    fs.readFile(path.join(__dirname,'admin.html'),(err,data)=>{
+      if(err){res.writeHead(404);return res.end('Not found');}
+      res.writeHead(200,{'Content-Type':'text/html;charset=utf-8'});
+      res.end(data);
+    });
+    return;
+  }
+
+  // POST /api/admin/login
+  if (req.method==='POST' && url==='/api/admin/login') {
+    const {username,password} = await parseBody(req);
+    if(!username||!password) return json(res,400,{error:'Missing credentials'});
+    const admins = loadAdmins();
+    const adm = admins[username.toLowerCase()];
+    if(!adm||adm.password!==hashPwAdmin(password)) return json(res,401,{error:'Invalid admin credentials'});
+    const token = signAdminToken({username:adm.username});
+    console.log(`[ADMIN LOGIN] ${adm.username}`);
+    return json(res,200,{token,username:adm.username});
+  }
+
+  // GET /api/admin/status
+  if (req.method==='GET' && url==='/api/admin/status') {
+    if(!isAdmin(req)) return json(res,401,{error:'Unauthorized'});
+    const db = loadUsers();
+    const allUsers = Object.values(db);
+    return json(res,200,{
+      online: wss.clients.size,
+      rooms:  rooms.size,
+      queue:  queue.length,
+      totalPlayers: allUsers.length,
+      banned: allUsers.filter(u=>u.banned).length,
+    });
+  }
+
+  // GET /api/admin/rooms — list all active rooms
+  if (req.method==='GET' && url==='/api/admin/rooms') {
+    if(!isAdmin(req)) return json(res,401,{error:'Unauthorized'});
+    const list = [];
+    for(const [id,room] of rooms) {
+      list.push({
+        id,
+        host:    room.host?.username || null,
+        guest:   room.guest?.username || null,
+        started: room.started,
+      });
+    }
+    return json(res,200,{rooms:list});
+  }
+
+  // POST /api/admin/kick-room — terminate a room
+  if (req.method==='POST' && url==='/api/admin/kick-room') {
+    if(!isAdmin(req)) return json(res,401,{error:'Unauthorized'});
+    const {roomId} = await parseBody(req);
+    const room = rooms.get(roomId);
+    if(!room) return json(res,404,{error:'Room not found'});
+    const msg = JSON.stringify({type:'admin_kick',reason:'Admin terminated this match'});
+    if(room.host?.readyState===WebSocket.OPEN) room.host.send(msg);
+    if(room.guest?.readyState===WebSocket.OPEN) room.guest.send(msg);
+    if(room.host) room.host.roomId=null;
+    if(room.guest) room.guest.roomId=null;
+    rooms.delete(roomId);
+    console.log(`[ADMIN] Kicked room ${roomId}`);
+    return json(res,200,{ok:true});
+  }
+
+  // POST /api/admin/kick-all — terminate all rooms
+  if (req.method==='POST' && url==='/api/admin/kick-all') {
+    if(!isAdmin(req)) return json(res,401,{error:'Unauthorized'});
+    let count=0;
+    for(const [id,room] of rooms) {
+      const msg=JSON.stringify({type:'admin_kick',reason:'Admin cleared all rooms'});
+      if(room.host?.readyState===WebSocket.OPEN) room.host.send(msg);
+      if(room.guest?.readyState===WebSocket.OPEN) room.guest.send(msg);
+      if(room.host) room.host.roomId=null;
+      if(room.guest) room.guest.roomId=null;
+      rooms.delete(id); count++;
+    }
+    console.log(`[ADMIN] Kicked all rooms (${count})`);
+    return json(res,200,{ok:true,count});
+  }
+
+  // GET /api/admin/users — list all users with full data
+  if (req.method==='GET' && url==='/api/admin/users') {
+    if(!isAdmin(req)) return json(res,401,{error:'Unauthorized'});
+    const db = loadUsers();
+    const users = Object.values(db).map(u=>({
+      username:    u.username,
+      createdAt:   u.createdAt,
+      stats:       u.stats || {wins:0,losses:0},
+      shopData:    u.shopData || null,
+      campProgress:u.campProgress || {cleared:[]},
+      banned:      u.banned || false,
+    }));
+    return json(res,200,{users});
+  }
+
+  // POST /api/admin/ban — ban or unban a user
+  if (req.method==='POST' && url==='/api/admin/ban') {
+    if(!isAdmin(req)) return json(res,401,{error:'Unauthorized'});
+    const {username, ban} = await parseBody(req);
+    const db = loadUsers();
+    const user = db[username.toLowerCase()];
+    if(!user) return json(res,404,{error:'User not found'});
+    user.banned = !!ban;
+    saveUsers(db);
+    // Kick banned user's WS if connected
+    if(ban) {
+      wss.clients.forEach(ws=>{
+        if(ws.username?.toLowerCase()===username.toLowerCase()) {
+          ws.send(JSON.stringify({type:'banned',reason:'Your account has been banned by admin'}));
+          ws.terminate();
+        }
+      });
+    }
+    console.log(`[ADMIN] ${ban?'Banned':'Unbanned'}: ${username}`);
+    return json(res,200,{ok:true});
+  }
+
+  // POST /api/admin/edit-stats — adjust wins, losses, coins
+  if (req.method==='POST' && url==='/api/admin/edit-stats') {
+    if(!isAdmin(req)) return json(res,401,{error:'Unauthorized'});
+    const {username, wins, losses, coins} = await parseBody(req);
+    const db = loadUsers();
+    const user = db[username.toLowerCase()];
+    if(!user) return json(res,404,{error:'User not found'});
+    user.stats = { ...user.stats, wins: Math.max(0,wins||0), losses: Math.max(0,losses||0) };
+    if(!user.shopData) user.shopData = {};
+    user.shopData.coins = Math.max(0, coins||0);
+    saveUsers(db);
+    console.log(`[ADMIN] Edited stats: ${username} W:${wins} L:${losses} C:${coins}`);
+    return json(res,200,{ok:true});
+  }
+
+  // POST /api/admin/reset-stats — zero out stats
+  if (req.method==='POST' && url==='/api/admin/reset-stats') {
+    if(!isAdmin(req)) return json(res,401,{error:'Unauthorized'});
+    const {username} = await parseBody(req);
+    const db = loadUsers();
+    const user = db[username.toLowerCase()];
+    if(!user) return json(res,404,{error:'User not found'});
+    user.stats = {wins:0,losses:0};
+    if(user.shopData) user.shopData.coins = 0;
+    saveUsers(db);
+    console.log(`[ADMIN] Reset stats: ${username}`);
+    return json(res,200,{ok:true});
+  }
+
+  // POST /api/admin/create-room — admin creates a room
+  if (req.method==='POST' && url==='/api/admin/create-room') {
+    if(!isAdmin(req)) return json(res,401,{error:'Unauthorized'});
+    const rid = genRoomId();
+    rooms.set(rid,{host:null,guest:null,started:false,adminCreated:true});
+    console.log(`[ADMIN] Created room: ${rid}`);
+    return json(res,201,{roomId:rid});
+  }
+
+  // POST /api/admin/launch-game — create room with custom map config
+  if (req.method==='POST' && url==='/api/admin/launch-game') {
+    if(!isAdmin(req)) return json(res,401,{error:'Unauthorized'});
+    const {mapId, obstacles, hp, gun, mode, target} = await parseBody(req);
+    const rid = genRoomId();
+    const customGameState = {
+      players:[
+        {id:1,x:80,y:80,hp:hp||70,maxHp:hp||70,gunId:gun||'smg'},
+        {id:2,x:970,y:540,hp:hp||70,maxHp:hp||70,gunId:gun||'smg'}
+      ],
+      obstacles: obstacles || makeGameState().obstacles,
+      items:[],
+      mapId: mapId||'default',
+    };
+    rooms.set(rid,{host:null,guest:null,started:false,adminCreated:true,customGameState,mode});
+    // If target player is online, send them the room invite
+    if(target) {
+      wss.clients.forEach(ws=>{
+        if(ws.username?.toLowerCase()===target.toLowerCase()) {
+          ws.send(JSON.stringify({type:'admin_invite',roomId:rid,message:`Admin invited you to room ${rid}`}));
+        }
+      });
+    }
+    console.log(`[ADMIN] Launched game: map=${mapId} room=${rid} hp=${hp} gun=${gun}`);
+    return json(res,201,{roomId:rid,gameState:customGameState});
   }
 
   json(res,404,{error:'Not found'});
@@ -265,7 +462,12 @@ function handleMsg(ws,msg){
 
     case 'auth': {
       const p=verifyToken(msg.token||'');
-      if(p){ws.username=p.username;send(ws,{type:'auth_ok',username:p.username});}
+      if(p){
+        const db=loadUsers();
+        const user=db[p.username.toLowerCase()];
+        if(user?.banned){ send(ws,{type:'auth_fail',reason:'banned'}); ws.terminate(); break; }
+        ws.username=p.username;send(ws,{type:'auth_ok',username:p.username});
+      }
       else send(ws,{type:'auth_fail'});
       break;
     }
@@ -307,7 +509,7 @@ function handleMsg(ws,msg){
       room.started=true;
       send(room.host,{type:'match_found',playerId:1,roomId:rid,opponent:room.guest.username||'???'});
       send(room.guest,{type:'match_found',playerId:2,roomId:rid,opponent:room.host.username||'???'});
-      setTimeout(()=>{const gs=makeGameState();send(room.host,{type:'game_start',gameState:gs});send(room.guest,{type:'game_start',gameState:gs});},800);
+      setTimeout(()=>{const gs=room.customGameState||makeGameState();send(room.host,{type:'game_start',gameState:gs});send(room.guest,{type:'game_start',gameState:gs});},800);
       break;
     }
     case 'cancel_room':{

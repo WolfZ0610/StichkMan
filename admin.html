@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>STICKMAN ARENA — ADMIN</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Black+Ops+One&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#04040c;--ink2:#080815;--ink3:#0d0d1e;
+  --gold:#d4a017;--gold2:#f5c842;--gold3:#ffe082;
+  --cyan:#00d4ff;--cyan2:#4facfe;
+  --red:#ff1a3a;--red2:#ff5c75;
+  --green:#00ff9d;--green2:#39ff6e;
+  --amber:#ff8c00;
+  --purple:#a855f7;
+  --txt-dim:rgba(255,255,255,.18);
+  --txt-mid:rgba(255,255,255,.45);
+  --bdr-gold:rgba(212,160,23,.25);
+  --bdr-dim:rgba(255,255,255,.07);
+  --panel-bg:rgba(255,255,255,.03);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;background:var(--ink);color:#fff;font-family:'Rajdhani',sans-serif;overflow:hidden}
+
+/* ── NOISE + SCANLINES ── */
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='256' height='256' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  background-size:256px;opacity:.4}
+body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent 0px,transparent 3px,rgba(0,0,0,.1) 3px,rgba(0,0,0,.1) 4px)}
+
+/* ── LOGIN SCREEN ── */
+#login-screen{
+  position:fixed;inset:0;z-index:100;
+  display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse 100% 80% at 50% 0%,rgba(212,160,23,.07) 0%,transparent 60%),var(--ink);
+}
+.login-box{
+  width:380px;padding:48px 40px;position:relative;
+  background:linear-gradient(135deg,rgba(255,255,255,.04),rgba(255,255,255,.01));
+  border:1px solid var(--bdr-gold);
+  clip-path:polygon(20px 0,100% 0,calc(100% - 20px) 100%,0 100%);
+  animation:boxIn .6s cubic-bezier(.16,1,.3,1) both
+}
+@keyframes boxIn{from{opacity:0;transform:translateY(30px) scale(.96)}to{opacity:1;transform:none}}
+.login-badge{
+  font-family:'Share Tech Mono',monospace;font-size:.55rem;
+  letter-spacing:8px;color:var(--red2);margin-bottom:10px;
+  display:flex;align-items:center;gap:8px
+}
+.login-badge::before{content:'';width:6px;height:6px;background:var(--red);border-radius:50%;
+  box-shadow:0 0 8px var(--red);animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+.login-title{
+  font-family:'Black Ops One',cursive;font-size:2rem;
+  background:linear-gradient(180deg,#fff 0%,var(--gold2) 60%,var(--gold) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:6px
+}
+.login-sub{font-size:.75rem;color:var(--txt-mid);letter-spacing:3px;font-family:'Share Tech Mono',monospace;margin-bottom:32px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:.7rem;letter-spacing:4px;color:var(--gold2);margin-bottom:8px;font-family:'Share Tech Mono',monospace}
+.field input{
+  width:100%;padding:12px 16px;background:rgba(255,255,255,.04);
+  border:1px solid var(--bdr-dim);border-bottom-color:var(--bdr-gold);
+  color:#fff;font-family:'Share Tech Mono',monospace;font-size:.9rem;
+  outline:none;transition:border-color .2s,box-shadow .2s
+}
+.field input:focus{border-color:var(--gold);box-shadow:0 0 20px rgba(212,160,23,.1)}
+.login-btn{
+  width:100%;padding:14px;margin-top:8px;cursor:pointer;
+  background:linear-gradient(135deg,rgba(212,160,23,.2),rgba(212,160,23,.05));
+  border:1px solid var(--gold);color:var(--gold2);
+  font-family:'Black Ops One',cursive;font-size:1rem;letter-spacing:4px;
+  clip-path:polygon(14px 0,100% 0,calc(100% - 14px) 100%,0 100%);
+  transition:background .2s,box-shadow .2s;
+}
+.login-btn:hover{background:linear-gradient(135deg,rgba(212,160,23,.35),rgba(212,160,23,.1));
+  box-shadow:0 0 30px rgba(212,160,23,.2)}
+.login-error{color:var(--red2);font-size:.8rem;letter-spacing:2px;margin-top:12px;
+  font-family:'Share Tech Mono',monospace;display:none;text-align:center}
+
+/* ── MAIN LAYOUT ── */
+#app{display:none;height:100vh;overflow:hidden;position:relative;z-index:1}
+.hud-top{
+  height:56px;background:rgba(0,0,0,.6);border-bottom:1px solid var(--bdr-gold);
+  display:flex;align-items:center;padding:0 24px;gap:20px;
+  position:relative;z-index:10
+}
+.hud-logo{font-family:'Black Ops One',cursive;font-size:1.1rem;
+  background:linear-gradient(90deg,var(--gold2),var(--gold3));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  letter-spacing:2px}
+.hud-badge{
+  font-family:'Share Tech Mono',monospace;font-size:.55rem;letter-spacing:5px;
+  color:var(--red2);padding:3px 10px;border:1px solid rgba(255,26,58,.3);
+  background:rgba(255,26,58,.08)
+}
+.hud-status{margin-left:auto;display:flex;align-items:center;gap:20px}
+.hud-stat{display:flex;flex-direction:column;align-items:flex-end}
+.hud-stat-label{font-size:.55rem;letter-spacing:3px;color:var(--txt-dim);font-family:'Share Tech Mono',monospace}
+.hud-stat-val{font-size:.9rem;font-weight:700;color:var(--cyan);font-family:'Share Tech Mono',monospace}
+.hud-admin-name{font-size:.8rem;color:var(--gold2);letter-spacing:2px}
+.logout-btn{
+  padding:6px 16px;background:rgba(255,26,58,.1);border:1px solid rgba(255,26,58,.3);
+  color:var(--red2);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:3px;
+  cursor:pointer;transition:background .2s
+}
+.logout-btn:hover{background:rgba(255,26,58,.25)}
+
+.main-layout{display:flex;height:calc(100vh - 56px)}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:200px;flex-shrink:0;
+  background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.01));
+  border-right:1px solid var(--bdr-dim);
+  padding:16px 0;overflow-y:auto
+}
+.nav-section{padding:8px 20px;font-size:.55rem;letter-spacing:5px;color:var(--txt-dim);
+  font-family:'Share Tech Mono',monospace;margin-top:8px}
+.nav-item{
+  display:flex;align-items:center;gap:12px;padding:11px 20px;cursor:pointer;
+  transition:background .15s,color .15s;position:relative;
+  font-size:.82rem;letter-spacing:1.5px;color:var(--txt-mid)
+}
+.nav-item:hover{background:rgba(255,255,255,.04);color:#fff}
+.nav-item.active{background:rgba(212,160,23,.07);color:var(--gold2)}
+.nav-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--gold2)}
+.nav-icon{width:18px;text-align:center;font-size:.9rem}
+
+/* ── CONTENT ── */
+.content{flex:1;overflow-y:auto;padding:24px;
+  background:radial-gradient(ellipse 80% 50% at 50% 0%,rgba(0,212,255,.02),transparent 60%)}
+
+.page{display:none}
+.page.active{display:block}
+
+.page-title{
+  font-family:'Black Ops One',cursive;font-size:1.4rem;
+  color:var(--gold2);letter-spacing:3px;margin-bottom:4px
+}
+.page-sub{font-size:.75rem;color:var(--txt-dim);letter-spacing:3px;
+  font-family:'Share Tech Mono',monospace;margin-bottom:24px}
+
+/* ── STAT CARDS ROW ── */
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.stat-card{
+  padding:20px;position:relative;overflow:hidden;
+  background:linear-gradient(135deg,rgba(255,255,255,.04),rgba(255,255,255,.01));
+  border:1px solid var(--bdr-dim);
+  clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);
+  transition:border-color .2s
+}
+.stat-card:hover{border-color:var(--bdr-gold)}
+.stat-card-label{font-size:.6rem;letter-spacing:4px;color:var(--txt-dim);
+  font-family:'Share Tech Mono',monospace;margin-bottom:10px}
+.stat-card-val{font-size:2rem;font-weight:700;font-family:'Share Tech Mono',monospace}
+.stat-card-sub{font-size:.65rem;color:var(--txt-dim);margin-top:4px}
+.stat-card.c-cyan .stat-card-val{color:var(--cyan)}
+.stat-card.c-green .stat-card-val{color:var(--green)}
+.stat-card.c-gold .stat-card-val{color:var(--gold2)}
+.stat-card.c-red .stat-card-val{color:var(--red2)}
+.stat-card::after{content:'';position:absolute;right:-20px;bottom:-20px;
+  width:80px;height:80px;border-radius:50%;opacity:.06;
+  background:currentColor}
+
+/* ── TABLE ── */
+.panel{
+  background:linear-gradient(135deg,rgba(255,255,255,.03),rgba(255,255,255,.01));
+  border:1px solid var(--bdr-dim);margin-bottom:20px;overflow:hidden
+}
+.panel-header{
+  padding:14px 20px;border-bottom:1px solid var(--bdr-dim);
+  display:flex;align-items:center;justify-content:space-between;
+  background:rgba(0,0,0,.2)
+}
+.panel-title{font-size:.75rem;letter-spacing:4px;color:var(--txt-mid);
+  font-family:'Share Tech Mono',monospace}
+.panel-actions{display:flex;gap:8px}
+
+.search-box{
+  padding:7px 14px;background:rgba(255,255,255,.04);
+  border:1px solid var(--bdr-dim);color:#fff;outline:none;
+  font-family:'Share Tech Mono',monospace;font-size:.75rem;width:200px;
+  transition:border-color .2s
+}
+.search-box:focus{border-color:var(--gold)}
+.search-box::placeholder{color:var(--txt-dim)}
+
+.btn{
+  padding:7px 16px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:.65rem;
+  letter-spacing:2px;border:1px solid;transition:background .2s,box-shadow .2s;
+  white-space:nowrap
+}
+.btn-gold{background:rgba(212,160,23,.1);border-color:rgba(212,160,23,.4);color:var(--gold2)}
+.btn-gold:hover{background:rgba(212,160,23,.25);box-shadow:0 0 16px rgba(212,160,23,.15)}
+.btn-red{background:rgba(255,26,58,.08);border-color:rgba(255,26,58,.35);color:var(--red2)}
+.btn-red:hover{background:rgba(255,26,58,.22)}
+.btn-cyan{background:rgba(0,212,255,.08);border-color:rgba(0,212,255,.3);color:var(--cyan)}
+.btn-cyan:hover{background:rgba(0,212,255,.2)}
+.btn-green{background:rgba(0,255,157,.08);border-color:rgba(0,255,157,.3);color:var(--green)}
+.btn-green:hover{background:rgba(0,255,157,.2)}
+.btn-purple{background:rgba(168,85,247,.08);border-color:rgba(168,85,247,.3);color:var(--purple)}
+.btn-purple:hover{background:rgba(168,85,247,.2)}
+.btn-sm{padding:5px 10px;font-size:.6rem}
+
+table{width:100%;border-collapse:collapse}
+thead{background:rgba(0,0,0,.3)}
+th{padding:12px 16px;text-align:left;font-size:.6rem;letter-spacing:4px;
+  color:var(--txt-dim);font-family:'Share Tech Mono',monospace;border-bottom:1px solid var(--bdr-dim)}
+td{padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.04);
+  font-size:.85rem;vertical-align:middle}
+tr:hover td{background:rgba(255,255,255,.02)}
+tr:last-child td{border-bottom:none}
+.td-mono{font-family:'Share Tech Mono',monospace;font-size:.8rem}
+.td-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+.badge{display:inline-block;padding:2px 10px;font-size:.6rem;letter-spacing:2px;
+  font-family:'Share Tech Mono',monospace;border:1px solid;border-radius:0}
+.badge-green{color:var(--green);border-color:rgba(0,255,157,.3);background:rgba(0,255,157,.06)}
+.badge-red{color:var(--red2);border-color:rgba(255,26,58,.3);background:rgba(255,26,58,.06)}
+.badge-gold{color:var(--gold2);border-color:var(--bdr-gold);background:rgba(212,160,23,.06)}
+.badge-cyan{color:var(--cyan);border-color:rgba(0,212,255,.3);background:rgba(0,212,255,.06)}
+.badge-purple{color:var(--purple);border-color:rgba(168,85,247,.3);background:rgba(168,85,247,.06)}
+.badge-dim{color:var(--txt-mid);border-color:var(--bdr-dim)}
+
+/* ── ROOMS GRID ── */
+.rooms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.room-card{
+  padding:18px;position:relative;
+  background:linear-gradient(135deg,rgba(255,255,255,.04),rgba(255,255,255,.01));
+  border:1px solid var(--bdr-dim);
+  clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);
+  transition:border-color .2s
+}
+.room-card.active-game{border-color:rgba(0,255,157,.25)}
+.room-card.waiting{border-color:rgba(212,160,23,.2)}
+.room-card-id{font-family:'Black Ops One',cursive;font-size:1.4rem;
+  color:var(--gold2);letter-spacing:4px;margin-bottom:8px}
+.room-card-status{margin-bottom:12px}
+.room-players{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.room-player{display:flex;align-items:center;gap:8px;font-size:.8rem}
+.room-player-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.p1-dot{background:var(--cyan)}
+.p2-dot{background:var(--red2)}
+
+/* ── MAP SELECTOR ── */
+.maps-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.map-card{
+  position:relative;overflow:hidden;cursor:pointer;
+  border:1px solid var(--bdr-dim);
+  background:linear-gradient(135deg,rgba(255,255,255,.04),rgba(255,255,255,.01));
+  transition:border-color .2s,transform .15s
+}
+.map-card:hover{border-color:var(--gold);transform:translateY(-2px)}
+.map-card.selected{border-color:var(--cyan);box-shadow:0 0 20px rgba(0,212,255,.15)}
+.map-preview{height:120px;display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;background:rgba(0,0,0,.3)}
+.map-preview canvas{border:none;display:block;max-width:100%;max-height:100%}
+.map-name{padding:10px 14px 6px;font-family:'Black Ops One',cursive;font-size:.9rem;
+  color:var(--gold2);letter-spacing:2px}
+.map-desc{padding:0 14px 12px;font-size:.7rem;color:var(--txt-mid);letter-spacing:1px}
+.map-check{position:absolute;top:8px;right:8px;display:none}
+.map-card.selected .map-check{display:block;color:var(--cyan);font-size:1.1rem}
+
+/* ── MODAL ── */
+.modal-overlay{
+  position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.8);
+  display:none;align-items:center;justify-content:center;
+  backdrop-filter:blur(4px)
+}
+.modal-overlay.open{display:flex}
+.modal{
+  width:460px;padding:36px;position:relative;
+  background:linear-gradient(135deg,rgba(8,8,21,.98),rgba(4,4,12,.99));
+  border:1px solid var(--bdr-gold);
+  clip-path:polygon(20px 0,100% 0,calc(100% - 20px) 100%,0 100%);
+  animation:modalIn .25s cubic-bezier(.16,1,.3,1) both
+}
+@keyframes modalIn{from{opacity:0;transform:scale(.93)}to{opacity:1;transform:none}}
+.modal-title{font-family:'Black Ops One',cursive;font-size:1.2rem;color:var(--gold2);
+  letter-spacing:3px;margin-bottom:4px}
+.modal-sub{font-size:.7rem;color:var(--txt-dim);letter-spacing:3px;
+  font-family:'Share Tech Mono',monospace;margin-bottom:24px}
+.modal .field input,.modal .field select{
+  width:100%;padding:10px 14px;background:rgba(255,255,255,.05);
+  border:1px solid var(--bdr-dim);border-bottom-color:var(--bdr-gold);
+  color:#fff;font-family:'Share Tech Mono',monospace;font-size:.85rem;outline:none
+}
+.modal .field select option{background:#080815}
+.modal-footer{display:flex;gap:10px;margin-top:24px;justify-content:flex-end}
+.modal-close{position:absolute;top:16px;right:20px;cursor:pointer;
+  color:var(--txt-dim);font-size:1.1rem;transition:color .15s}
+.modal-close:hover{color:var(--red2)}
+
+/* ── TOAST ── */
+#toast{
+  position:fixed;bottom:32px;right:32px;z-index:300;
+  font-family:'Share Tech Mono',monospace;font-size:.75rem;letter-spacing:2px;
+  padding:12px 24px;border:1px solid;min-width:220px;text-align:center;
+  transform:translateY(20px);opacity:0;
+  transition:transform .3s,opacity .3s;pointer-events:none
+}
+#toast.show{transform:translateY(0);opacity:1}
+#toast.t-ok{color:var(--green);border-color:rgba(0,255,157,.4);background:rgba(0,255,157,.08)}
+#toast.t-err{color:var(--red2);border-color:rgba(255,26,58,.4);background:rgba(255,26,58,.08)}
+#toast.t-info{color:var(--cyan);border-color:rgba(0,212,255,.4);background:rgba(0,212,255,.08)}
+
+/* ── EMPTY STATE ── */
+.empty{padding:48px;text-align:center;color:var(--txt-dim);
+  font-family:'Share Tech Mono',monospace;font-size:.75rem;letter-spacing:3px}
+
+/* ── LIVE INDICATOR ── */
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);
+  display:inline-block;margin-right:6px;
+  box-shadow:0 0 8px var(--green);animation:livePulse 1.5s ease-in-out infinite}
+@keyframes livePulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:rgba(255,255,255,.02)}
+::-webkit-scrollbar-thumb{background:var(--bdr-gold);border-radius:2px}
+
+/* ── GAME LAUNCH PANEL ── */
+.launch-config{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+.config-item{padding:16px;background:rgba(255,255,255,.03);border:1px solid var(--bdr-dim)}
+.config-label{font-size:.6rem;letter-spacing:4px;color:var(--txt-dim);
+  font-family:'Share Tech Mono',monospace;margin-bottom:8px}
+.config-val{font-size:1rem;color:#fff;font-weight:600}
+.config-val select,.config-val input[type=range]{
+  width:100%;background:transparent;border:none;outline:none;
+  color:var(--gold2);font-family:'Share Tech Mono',monospace;font-size:.9rem
+}
+.config-val select option{background:#080815}
+input[type=range]{accent-color:var(--gold2)}
+
+.log-box{background:rgba(0,0,0,.5);border:1px solid var(--bdr-dim);
+  height:180px;overflow-y:auto;padding:12px;
+  font-family:'Share Tech Mono',monospace;font-size:.7rem}
+.log-line{padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.log-line span{color:var(--txt-dim);margin-right:8px}
+.log-ok{color:var(--green)}
+.log-warn{color:var(--amber)}
+.log-err{color:var(--red2)}
+.log-info{color:var(--cyan)}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-badge">RESTRICTED ACCESS</div>
+    <div class="login-title">ADMIN PANEL</div>
+    <div class="login-sub">STICKMAN ARENA v2</div>
+    <div class="field"><label>ADMIN USERNAME</label><input id="l-user" type="text" placeholder="admin" autocomplete="off"></div>
+    <div class="field"><label>PASSWORD</label><input id="l-pass" type="password" placeholder="••••••••"></div>
+    <button class="login-btn" onclick="doLogin()">AUTHENTICATE</button>
+    <div class="login-error" id="l-err">⚠ INVALID CREDENTIALS</div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <div class="hud-top">
+    <div class="hud-logo">STICKMAN ARENA</div>
+    <div class="hud-badge">ADMIN CONSOLE</div>
+    <div class="hud-status">
+      <div class="hud-stat"><span class="hud-stat-label">ONLINE</span><span class="hud-stat-val" id="stat-online">0</span></div>
+      <div class="hud-stat"><span class="hud-stat-label">ROOMS</span><span class="hud-stat-val" id="stat-rooms">0</span></div>
+      <div class="hud-stat"><span class="hud-stat-label">PLAYERS</span><span class="hud-stat-val" id="stat-players">0</span></div>
+      <div class="hud-admin-name" id="admin-name">—</div>
+      <button class="logout-btn" onclick="doLogout()">LOGOUT</button>
+    </div>
+  </div>
+  <div class="main-layout">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="nav-section">MONITOR</div>
+      <div class="nav-item active" onclick="goto('dashboard')"><span class="nav-icon">⬡</span>Dashboard</div>
+      <div class="nav-item" onclick="goto('rooms')"><span class="nav-icon">⬢</span>Live Rooms</div>
+      <div class="nav-section">MANAGE</div>
+      <div class="nav-item" onclick="goto('users')"><span class="nav-icon">◈</span>Users</div>
+      <div class="nav-item" onclick="goto('leaderboard')"><span class="nav-icon">◆</span>Leaderboard</div>
+      <div class="nav-section">TOOLS</div>
+      <div class="nav-item" onclick="goto('maps')"><span class="nav-icon">▣</span>Map Launcher</div>
+      <div class="nav-item" onclick="goto('logs')"><span class="nav-icon">▤</span>Server Log</div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div id="page-dashboard" class="page active">
+        <div class="page-title">DASHBOARD</div>
+        <div class="page-sub">SYSTEM OVERVIEW · LIVE STATUS</div>
+        <div class="stat-row">
+          <div class="stat-card c-cyan"><div class="stat-card-label">ONLINE PLAYERS</div><div class="stat-card-val" id="d-online">0</div><div class="stat-card-sub">WebSocket connections</div></div>
+          <div class="stat-card c-green"><div class="stat-card-label">ACTIVE ROOMS</div><div class="stat-card-val" id="d-rooms">0</div><div class="stat-card-sub">In-progress matches</div></div>
+          <div class="stat-card c-gold"><div class="stat-card-label">TOTAL PLAYERS</div><div class="stat-card-val" id="d-players">0</div><div class="stat-card-sub">Registered accounts</div></div>
+          <div class="stat-card c-red"><div class="stat-card-label">BANNED</div><div class="stat-card-val" id="d-banned">0</div><div class="stat-card-sub">Suspended accounts</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title"><span class="live-dot"></span>TOP PLAYERS — WIN RATE</div>
+            <button class="btn btn-gold btn-sm" onclick="loadLeaderboard()">REFRESH</button>
+          </div>
+          <table>
+            <thead><tr><th>#</th><th>USERNAME</th><th>WINS</th><th>LOSSES</th><th>WIN RATE</th><th>COINS</th><th>STATUS</th></tr></thead>
+            <tbody id="dash-lb"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- LIVE ROOMS -->
+      <div id="page-rooms" class="page">
+        <div class="page-title">LIVE ROOMS</div>
+        <div class="page-sub">REAL-TIME MATCH MONITOR · AUTO REFRESH 5s</div>
+        <div style="display:flex;gap:10px;margin-bottom:16px">
+          <button class="btn btn-cyan" onclick="loadRooms()">REFRESH NOW</button>
+          <button class="btn btn-red" id="kick-all-btn" onclick="kickAll()">KICK ALL</button>
+        </div>
+        <div id="rooms-container" class="rooms-grid"><div class="empty">No active rooms</div></div>
+      </div>
+
+      <!-- USERS -->
+      <div id="page-users" class="page">
+        <div class="page-title">USER MANAGEMENT</div>
+        <div class="page-sub">BAN · RESET STATS · ADJUST COINS</div>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">ALL ACCOUNTS</div>
+            <div class="panel-actions">
+              <input class="search-box" id="user-search" placeholder="Search username..." oninput="filterUsers()">
+              <button class="btn btn-gold" onclick="loadUsers()">REFRESH</button>
+            </div>
+          </div>
+          <table>
+            <thead><tr><th>USERNAME</th><th>JOINED</th><th>WINS</th><th>LOSSES</th><th>COINS</th><th>STATUS</th><th>ACTIONS</th></tr></thead>
+            <tbody id="users-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- LEADERBOARD -->
+      <div id="page-leaderboard" class="page">
+        <div class="page-title">LEADERBOARD</div>
+        <div class="page-sub">RANKINGS BY MODE</div>
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <button class="btn btn-gold" onclick="setLbMode('total')">ALL MODES</button>
+          <button class="btn btn-cyan" onclick="setLbMode('online')">ONLINE</button>
+          <button class="btn btn-purple" onclick="setLbMode('campaign')">CAMPAIGN</button>
+          <button class="btn btn-green" onclick="setLbMode('practice')">PRACTICE</button>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title" id="lb-mode-title">ALL MODES RANKING</div></div>
+          <table>
+            <thead><tr><th>#</th><th>USERNAME</th><th>WINS</th><th>LOSSES</th><th>WIN RATE</th><th>COINS</th></tr></thead>
+            <tbody id="lb-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- MAP LAUNCHER -->
+      <div id="page-maps" class="page">
+        <div class="page-title">MAP LAUNCHER</div>
+        <div class="page-sub">START CUSTOM GAME · SELECT MAP & CONFIG</div>
+        <div class="launch-config">
+          <div class="config-item">
+            <div class="config-label">GAME MODE</div>
+            <div class="config-val">
+              <select id="cfg-mode">
+                <option value="vs_ai">VS AI (Bot)</option>
+                <option value="practice">Practice</option>
+                <option value="online">Online (Spectate)</option>
+              </select>
+            </div>
+          </div>
+          <div class="config-item">
+            <div class="config-label">PLAYER HP</div>
+            <div class="config-val">
+              <input type="range" id="cfg-hp" min="30" max="200" value="70" oninput="document.getElementById('hp-val').textContent=this.value">
+              <span id="hp-val" style="color:var(--gold2);font-size:.8rem;font-family:'Share Tech Mono',monospace">70</span> HP
+            </div>
+          </div>
+          <div class="config-item">
+            <div class="config-label">START WEAPON</div>
+            <div class="config-val">
+              <select id="cfg-gun">
+                <option value="smg">SMG</option>
+                <option value="rifle">Rifle</option>
+                <option value="pistol">Pistol</option>
+                <option value="cannon">Cannon</option>
+              </select>
+            </div>
+          </div>
+          <div class="config-item">
+            <div class="config-label">TARGET PLAYERS</div>
+            <div class="config-val">
+              <select id="cfg-target">
+                <option value="">— None (open room) —</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="page-sub" style="margin-bottom:16px">SELECT MAP</div>
+        <div class="maps-grid" id="maps-grid"></div>
+        <div style="margin-top:20px;display:flex;gap:12px;align-items:center">
+          <button class="btn btn-green" onclick="launchGame()" style="padding:12px 32px;font-size:.8rem">▶ LAUNCH GAME</button>
+          <button class="btn btn-gold" onclick="generateRoom()">CREATE ROOM CODE</button>
+          <span id="room-code-display" style="font-family:'Share Tech Mono',monospace;color:var(--gold2);font-size:1.2rem;letter-spacing:8px"></span>
+        </div>
+        <div style="margin-top:20px">
+          <div class="config-label" style="margin-bottom:8px">LAUNCH LOG</div>
+          <div class="log-box" id="launch-log"></div>
+        </div>
+      </div>
+
+      <!-- SERVER LOG -->
+      <div id="page-logs" class="page">
+        <div class="page-title">SERVER LOG</div>
+        <div class="page-sub">ADMIN ACTION HISTORY</div>
+        <div style="display:flex;gap:10px;margin-bottom:16px">
+          <button class="btn btn-red btn-sm" onclick="clearLog()">CLEAR LOG</button>
+        </div>
+        <div class="log-box" id="server-log" style="height:500px"></div>
+      </div>
+
+    </div><!-- end content -->
+  </div>
+</div>
+
+<!-- MODALS -->
+<!-- Edit User Stats Modal -->
+<div class="modal-overlay" id="modal-stats">
+  <div class="modal">
+    <div class="modal-close" onclick="closeModal('modal-stats')">✕</div>
+    <div class="modal-title">EDIT STATS</div>
+    <div class="modal-sub" id="stats-modal-sub">USERNAME</div>
+    <div class="field"><label>TOTAL WINS</label><input id="m-wins" type="number" min="0"></div>
+    <div class="field"><label>TOTAL LOSSES</label><input id="m-losses" type="number" min="0"></div>
+    <div class="field"><label>COINS</label><input id="m-coins" type="number" min="0"></div>
+    <div class="modal-footer">
+      <button class="btn btn-red" onclick="closeModal('modal-stats')">CANCEL</button>
+      <button class="btn btn-gold" onclick="saveStats()">SAVE</button>
+    </div>
+  </div>
+</div>
+
+<!-- Kick Confirm Modal -->
+<div class="modal-overlay" id="modal-kick">
+  <div class="modal">
+    <div class="modal-close" onclick="closeModal('modal-kick')">✕</div>
+    <div class="modal-title">KICK PLAYER</div>
+    <div class="modal-sub" id="kick-modal-sub">Confirm kick from room?</div>
+    <div class="modal-footer">
+      <button class="btn btn-red" onclick="closeModal('modal-kick')">CANCEL</button>
+      <button class="btn btn-red" onclick="confirmKick()">CONFIRM KICK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════
+// CONFIG
+// ════════════════════════════════════════════
+const BASE = window.location.origin;
+let adminToken = null;
+let adminUsername = null;
+let allUsers = [];
+let lbData = [];
+let lbMode = 'total';
+let selectedMap = 'default';
+let kickTarget = null;
+let editTarget = null;
+let roomsInterval = null;
+
+// ════════════════════════════════════════════
+// AUTH
+// ════════════════════════════════════════════
+async function doLogin(){
+  const u = document.getElementById('l-user').value.trim();
+  const p = document.getElementById('l-pass').value;
+  const err = document.getElementById('l-err');
+  err.style.display = 'none';
+
+  const r = await fetch(`${BASE}/api/admin/login`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username:u, password:p})
+  });
+  const d = await r.json();
+  if(!r.ok || !d.token){ err.style.display='block'; return; }
+
+  adminToken = d.token;
+  adminUsername = d.username;
+  document.getElementById('admin-name').textContent = adminUsername.toUpperCase();
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  appStart();
+}
+
+function doLogout(){
+  adminToken = null;
+  clearInterval(roomsInterval);
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+document.getElementById('l-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+// ════════════════════════════════════════════
+// API HELPERS
+// ════════════════════════════════════════════
+async function api(method, path, body){
+  const opts = {
+    method, headers:{'Content-Type':'application/json','Authorization':'Bearer '+adminToken}
+  };
+  if(body) opts.body = JSON.stringify(body);
+  const r = await fetch(BASE+path, opts);
+  return { ok:r.ok, status:r.status, data: await r.json() };
+}
+
+// ════════════════════════════════════════════
+// NAVIGATION
+// ════════════════════════════════════════════
+function goto(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    if(n.textContent.toLowerCase().includes(page.replace('-',' ').toLowerCase().split(' ')[0]))
+      n.classList.add('active');
+  });
+  if(page==='rooms') loadRooms();
+  if(page==='users') loadUsers();
+  if(page==='leaderboard') loadLeaderboard();
+  if(page==='dashboard') loadDashboard();
+}
+
+// ════════════════════════════════════════════
+// APP START
+// ════════════════════════════════════════════
+function appStart(){
+  loadDashboard();
+  buildMapsGrid();
+  loadUserTargets();
+  roomsInterval = setInterval(()=>{
+    if(document.getElementById('page-rooms').classList.contains('active')) loadRooms();
+    loadStatusBar();
+  }, 5000);
+  slog('Admin session started', 'info');
+}
+
+// ════════════════════════════════════════════
+// STATUS BAR
+// ════════════════════════════════════════════
+async function loadStatusBar(){
+  const r = await api('GET','/api/admin/status');
+  if(!r.ok) return;
+  const d = r.data;
+  document.getElementById('stat-online').textContent = d.online || 0;
+  document.getElementById('stat-rooms').textContent = d.rooms || 0;
+  document.getElementById('stat-players').textContent = d.totalPlayers || 0;
+}
+
+// ════════════════════════════════════════════
+// DASHBOARD
+// ════════════════════════════════════════════
+async function loadDashboard(){
+  loadStatusBar();
+  const r = await api('GET','/api/leaderboard');
+  if(!r.ok) return;
+  const players = r.data.players || [];
+  document.getElementById('d-players').textContent = players.length;
+
+  const sr = await api('GET','/api/admin/status');
+  if(sr.ok){
+    document.getElementById('d-online').textContent = sr.data.online || 0;
+    document.getElementById('d-rooms').textContent = sr.data.rooms || 0;
+    document.getElementById('d-banned').textContent = sr.data.banned || 0;
+  }
+
+  const sorted = [...players].sort((a,b)=>b.total.wins-a.total.wins).slice(0,8);
+  document.getElementById('dash-lb').innerHTML = sorted.map((p,i)=>{
+    const total = p.total.wins + p.total.losses;
+    const wr = total ? Math.round(p.total.wins/total*100) : 0;
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1;
+    return `<tr>
+      <td><span class="badge badge-gold">${medal}</span></td>
+      <td><b>${p.username}</b></td>
+      <td class="td-mono" style="color:var(--green)">${p.total.wins}</td>
+      <td class="td-mono" style="color:var(--red2)">${p.total.losses}</td>
+      <td><div style="background:rgba(0,255,157,.1);width:${wr}%;min-width:2px;height:4px;margin-bottom:3px"></div>${wr}%</td>
+      <td class="td-mono" style="color:var(--gold2)">⬡ ${p.coins}</td>
+      <td><span class="badge badge-green">ACTIVE</span></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" class="empty">No data</td></tr>';
+}
+
+// ════════════════════════════════════════════
+// LIVE ROOMS
+// ════════════════════════════════════════════
+async function loadRooms(){
+  const r = await api('GET','/api/admin/rooms');
+  const rooms = r.ok ? (r.data.rooms||[]) : [];
+  document.getElementById('stat-rooms').textContent = rooms.length;
+  document.getElementById('d-rooms').textContent = rooms.length;
+
+  const c = document.getElementById('rooms-container');
+  if(!rooms.length){ c.innerHTML='<div class="empty">No active rooms found</div>'; return; }
+  c.innerHTML = rooms.map(room=>`
+    <div class="room-card ${room.started?'active-game':'waiting'}">
+      <div class="room-card-id">${room.id}</div>
+      <div class="room-card-status">
+        <span class="badge ${room.started?'badge-green':'badge-gold'}">${room.started?'IN GAME':'WAITING'}</span>
+      </div>
+      <div class="room-players">
+        <div class="room-player"><div class="room-player-dot p1-dot"></div>P1: <b>${room.host||'???'}</b></div>
+        <div class="room-player"><div class="room-player-dot ${room.guest?'p2-dot':''}"></div>P2: <b>${room.guest||'— waiting —'}</b></div>
+      </div>
+      <div class="td-actions">
+        <button class="btn btn-red btn-sm" onclick="openKick('${room.id}','${room.host||''}','${room.guest||''}')">KICK ROOM</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openKick(roomId, host, guest){
+  kickTarget = {roomId, host, guest};
+  document.getElementById('kick-modal-sub').textContent = `Room ${roomId}: ${host} vs ${guest||'(empty)'}`;
+  document.getElementById('modal-kick').classList.add('open');
+}
+async function confirmKick(){
+  if(!kickTarget) return;
+  const r = await api('POST','/api/admin/kick-room',{roomId:kickTarget.roomId});
+  closeModal('modal-kick');
+  if(r.ok){ toast('Room '+kickTarget.roomId+' terminated','ok'); slog(`Kicked room ${kickTarget.roomId}`,'warn'); loadRooms(); }
+  else toast('Failed to kick room','err');
+  kickTarget = null;
+}
+async function kickAll(){
+  const r = await api('POST','/api/admin/kick-all',{});
+  if(r.ok){ toast('All rooms cleared','ok'); slog('Kicked all rooms','warn'); loadRooms(); }
+}
+
+// ════════════════════════════════════════════
+// USERS
+// ════════════════════════════════════════════
+async function loadUsers(){
+  const r = await api('GET','/api/admin/users');
+  if(!r.ok) return;
+  allUsers = r.data.users || [];
+  document.getElementById('d-players').textContent = allUsers.length;
+  renderUsers(allUsers);
+  loadUserTargets(allUsers);
+}
+
+function filterUsers(){
+  const q = document.getElementById('user-search').value.toLowerCase();
+  renderUsers(allUsers.filter(u=>u.username.toLowerCase().includes(q)));
+}
+
+function renderUsers(users){
+  document.getElementById('users-table').innerHTML = users.map(u=>{
+    const total = u.stats.wins + u.stats.losses;
+    const wr = total ? Math.round(u.stats.wins/total*100) : 0;
+    const coins = u.shopData?.coins || 0;
+    const joined = new Date(u.createdAt).toLocaleDateString('vi-VN');
+    const isBanned = !!u.banned;
+    return `<tr>
+      <td><b>${u.username}</b></td>
+      <td class="td-mono" style="font-size:.7rem;color:var(--txt-dim)">${joined}</td>
+      <td class="td-mono" style="color:var(--green)">${u.stats.wins}</td>
+      <td class="td-mono" style="color:var(--red2)">${u.stats.losses}</td>
+      <td class="td-mono" style="color:var(--gold2)">⬡ ${coins}</td>
+      <td><span class="badge ${isBanned?'badge-red':'badge-green'}">${isBanned?'BANNED':'ACTIVE'}</span></td>
+      <td><div class="td-actions">
+        <button class="btn btn-gold btn-sm" onclick="openEditStats('${u.username}',${u.stats.wins},${u.stats.losses},${coins})">EDIT</button>
+        <button class="btn ${isBanned?'btn-green':'btn-red'} btn-sm" onclick="toggleBan('${u.username}',${isBanned})">${isBanned?'UNBAN':'BAN'}</button>
+        <button class="btn btn-cyan btn-sm" onclick="resetStats('${u.username}')">RESET</button>
+      </div></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" class="empty">No users found</td></tr>';
+}
+
+function openEditStats(username, wins, losses, coins){
+  editTarget = username;
+  document.getElementById('stats-modal-sub').textContent = username.toUpperCase();
+  document.getElementById('m-wins').value = wins;
+  document.getElementById('m-losses').value = losses;
+  document.getElementById('m-coins').value = coins;
+  document.getElementById('modal-stats').classList.add('open');
+}
+async function saveStats(){
+  const wins = parseInt(document.getElementById('m-wins').value)||0;
+  const losses = parseInt(document.getElementById('m-losses').value)||0;
+  const coins = parseInt(document.getElementById('m-coins').value)||0;
+  const r = await api('POST','/api/admin/edit-stats',{username:editTarget, wins, losses, coins});
+  closeModal('modal-stats');
+  if(r.ok){ toast('Stats updated for '+editTarget,'ok'); slog(`Edited stats: ${editTarget} → W:${wins} L:${losses} C:${coins}`,'ok'); loadUsers(); }
+  else toast('Failed to update','err');
+}
+async function toggleBan(username, isBanned){
+  const r = await api('POST','/api/admin/ban',{username, ban:!isBanned});
+  if(r.ok){ toast((!isBanned?'Banned ':'Unbanned ')+username, 'ok'); slog(`${!isBanned?'BANNED':'UNBANNED'}: ${username}`,'warn'); loadUsers(); }
+  else toast('Action failed','err');
+}
+async function resetStats(username){
+  if(!confirm(`Reset all stats for ${username}?`)) return;
+  const r = await api('POST','/api/admin/reset-stats',{username});
+  if(r.ok){ toast('Stats reset for '+username,'ok'); slog(`Reset stats: ${username}`,'warn'); loadUsers(); }
+  else toast('Failed','err');
+}
+
+// ════════════════════════════════════════════
+// LEADERBOARD
+// ════════════════════════════════════════════
+async function loadLeaderboard(){
+  const r = await api('GET','/api/leaderboard');
+  if(!r.ok) return;
+  lbData = r.data.players || [];
+  renderLb();
+}
+function setLbMode(mode){
+  lbMode = mode;
+  const titles = {total:'ALL MODES RANKING',online:'ONLINE RANKING',campaign:'CAMPAIGN RANKING',practice:'PRACTICE RANKING'};
+  document.getElementById('lb-mode-title').textContent = titles[mode]||'RANKING';
+  renderLb();
+}
+function renderLb(){
+  const key = lbMode;
+  const sorted = [...lbData].sort((a,b)=>{
+    const aw = key==='total'?a.total.wins:a[key]?.wins||0;
+    const bw = key==='total'?b.total.wins:b[key]?.wins||0;
+    return bw-aw;
+  });
+  document.getElementById('lb-table').innerHTML = sorted.map((p,i)=>{
+    const w = key==='total'?p.total.wins:(p[key]?.wins||0);
+    const l = key==='total'?p.total.losses:(p[key]?.losses||0);
+    const total = w+l;
+    const wr = total?Math.round(w/total*100):0;
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1;
+    return `<tr>
+      <td><span class="badge badge-gold">${medal}</span></td>
+      <td><b>${p.username}</b></td>
+      <td class="td-mono" style="color:var(--green)">${w}</td>
+      <td class="td-mono" style="color:var(--red2)">${l}</td>
+      <td>${wr}%</td>
+      <td class="td-mono" style="color:var(--gold2)">⬡ ${p.coins}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" class="empty">No data</td></tr>';
+}
+
+// ════════════════════════════════════════════
+// MAP LAUNCHER
+// ════════════════════════════════════════════
+const MAPS = [
+  {id:'default', name:'ARENA PRIME', desc:'Standard symmetric arena',
+   obstacles:[{x:525,y:280,w:50,h:90},{x:200,y:180,w:70,h:70},{x:160,y:380,w:55,h:55},{x:320,y:290,w:45,h:80},{x:830,y:180,w:70,h:70},{x:880,y:400,w:55,h:55},{x:730,y:290,w:45,h:80},{x:430,y:100,w:80,h:45},{x:590,y:100,w:80,h:45},{x:430,y:510,w:80,h:45},{x:590,y:510,w:80,h:45},{x:310,y:130,w:45,h:45},{x:745,y:480,w:45,h:45},{x:310,y:470,w:45,h:45},{x:745,y:130,w:45,h:45}]},
+  {id:'open', name:'OPEN FIELD', desc:'Minimal cover, fast fights',
+   obstacles:[{x:500,y:280,w:60,h:60},{x:250,y:200,w:40,h:40},{x:750,y:370,w:40,h:40}]},
+  {id:'fortress', name:'FORTRESS', desc:'Dense cover, tactical play',
+   obstacles:[{x:100,y:100,w:80,h:180},{x:870,y:100,w:80,h:180},{x:100,y:360,w:80,h:180},{x:870,y:360,w:80,h:180},{x:420,y:270,w:220,h:80},{x:200,y:50,w:60,h:40},{x:800,y:50,w:60,h:40},{x:200,y:560,w:60,h:40},{x:800,y:560,w:60,h:40}]},
+  {id:'corridor', name:'CORRIDOR', desc:'Long horizontal lanes',
+   obstacles:[{x:0,y:0,w:1050,h:120},{x:0,y:510,w:1050,h:120},{x:300,y:200,w:40,h:230},{x:720,y:200,w:40,h:230},{x:490,y:250,w:80,h:130}]},
+  {id:'chaos', name:'CHAOS MAP', desc:'Random obstacle layout',
+   obstacles:Array.from({length:18},(_,i)=>({x:80+Math.floor(Math.sin(i*1.7)*400+400),y:80+Math.floor(Math.cos(i*1.3)*200+200),w:35+i%3*15,h:35+i%2*20}))},
+  {id:'duel', name:'DUEL PIT', desc:'1v1 close quarters',
+   obstacles:[{x:460,y:240,w:140,h:140},{x:200,y:300,w:50,h:50},{x:800,y:300,w:50,h:50},{x:350,y:180,w:40,h:40},{x:670,y:420,w:40,h:40}]},
+];
+
+function buildMapsGrid(){
+  const grid = document.getElementById('maps-grid');
+  grid.innerHTML = MAPS.map(m=>`
+    <div class="map-card ${m.id===selectedMap?'selected':''}" onclick="selectMap('${m.id}')" id="mc-${m.id}">
+      <div class="map-preview"><canvas id="canvas-${m.id}" width="200" height="100"></canvas></div>
+      <div class="map-name">${m.name}</div>
+      <div class="map-desc">${m.desc}</div>
+      <div class="map-check">✓</div>
+    </div>
+  `).join('');
+  // Draw previews
+  MAPS.forEach(m=>drawMapPreview(m));
+}
+
+function drawMapPreview(map){
+  const canvas = document.getElementById('canvas-'+map.id);
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W=200,H=100;
+  const scaleX=W/1050,scaleY=H/630;
+  ctx.fillStyle='#080815'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(212,160,23,.15)';
+  for(let x=0;x<W;x+=20){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=10){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  ctx.fillStyle='rgba(255,255,255,.15)';
+  map.obstacles.forEach(o=>{ctx.fillRect(o.x*scaleX,o.y*scaleY,o.w*scaleX,o.h*scaleY);});
+  // Players
+  ctx.fillStyle='#00d4ff'; ctx.beginPath(); ctx.arc(10,10,4,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#ff1a3a'; ctx.beginPath(); ctx.arc(W-10,H-10,4,0,Math.PI*2); ctx.fill();
+}
+
+function selectMap(id){
+  selectedMap = id;
+  document.querySelectorAll('.map-card').forEach(c=>c.classList.remove('selected'));
+  document.getElementById('mc-'+id).classList.add('selected');
+}
+
+async function loadUserTargets(users){
+  if(!users){ const r=await api('GET','/api/admin/users'); users=r.ok?r.data.users:[]; }
+  const sel = document.getElementById('cfg-target');
+  sel.innerHTML = '<option value="">— None (open room) —</option>' +
+    users.map(u=>`<option value="${u.username}">${u.username}</option>`).join('');
+}
+
+async function generateRoom(){
+  const r = await api('POST','/api/admin/create-room',{});
+  if(r.ok){
+    document.getElementById('room-code-display').textContent = r.data.roomId;
+    slog('Admin created room: '+r.data.roomId,'info');
+    toast('Room created: '+r.data.roomId,'ok');
+  }
+}
+
+async function launchGame(){
+  const mapData = MAPS.find(m=>m.id===selectedMap);
+  const cfg = {
+    mapId: selectedMap,
+    obstacles: mapData.obstacles,
+    hp: parseInt(document.getElementById('cfg-hp').value),
+    gun: document.getElementById('cfg-gun').value,
+    mode: document.getElementById('cfg-mode').value,
+    target: document.getElementById('cfg-target').value,
+  };
+  const log = document.getElementById('launch-log');
+  function logLine(msg,cls='info'){
+    const t=new Date().toLocaleTimeString();
+    log.innerHTML += `<div class="log-line log-${cls}"><span>${t}</span>${msg}</div>`;
+    log.scrollTop=log.scrollHeight;
+  }
+  logLine(`Launching: ${mapData.name} | HP:${cfg.hp} | GUN:${cfg.gun.toUpperCase()} | MODE:${cfg.mode}`,'info');
+  const r = await api('POST','/api/admin/launch-game', cfg);
+  if(r.ok){
+    logLine(`Game launched! Room: ${r.data.roomId}`, 'ok');
+    document.getElementById('room-code-display').textContent = r.data.roomId;
+    toast('Game launched — Room: '+r.data.roomId,'ok');
+    slog(`Launched game: map=${selectedMap} room=${r.data.roomId}`,'ok');
+  } else {
+    logLine('Launch failed: '+JSON.stringify(r.data),'err');
+    toast('Launch failed','err');
+  }
+}
+
+// ════════════════════════════════════════════
+// SERVER LOG
+// ════════════════════════════════════════════
+function slog(msg, type='info'){
+  const box = document.getElementById('server-log');
+  const t = new Date().toLocaleTimeString();
+  box.innerHTML += `<div class="log-line log-${type}"><span>${t}</span>${msg}</div>`;
+  box.scrollTop = box.scrollHeight;
+}
+function clearLog(){
+  document.getElementById('server-log').innerHTML='';
+}
+
+// ════════════════════════════════════════════
+// MODALS
+// ════════════════════════════════════════════
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m=>{
+  m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('open'); });
+});
+
+// ════════════════════════════════════════════
+// TOAST
+// ════════════════════════════════════════════
+let toastTimer;
+function toast(msg, type='info'){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show t-${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
