@@ -2396,7 +2396,7 @@ canvas{display:block;cursor:crosshair}
       <div class="c-vs">VS</div>
       <div id="ping">🌐 --ms</div>
       <div id="online-match-timer" style="display:none;font-family:'Share Tech Mono',monospace;font-size:1.05rem;font-weight:700;letter-spacing:2px;color:#00d4ff;text-shadow:0 0 10px rgba(0,212,255,.6);background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.25);border-radius:6px;padding:3px 10px;margin-top:2px">⏱ 2:00</div>
-      <div id="ai-badge">🤖 A*<br>HC · SA<br>Minimax</div>
+      <div id="ai-badge">🤖 A*+h<br>SA · HC<br>AB · BT<br>NB · IM</div>
       <div id="stage-hud-badge"></div>
     </div>
 
@@ -4718,6 +4718,7 @@ function startGame(init=null){
   }
   bullets=[];effects=[];dmgNumbers=[];running=true;paused=false;
   NaiveBayes.reset(); // Reset Naive Bayes khi bắt đầu trận mới
+  BehaviorTree.reset(); walkGrid=null; coverTarget=null; influenceMap.fill(0); imLastUpdate=0;
   const nbEl=document.getElementById('nb-hud'); if(nbEl) nbEl.style.display='none';
   gameLoop();
   if(_itemSpawnInterval){clearInterval(_itemSpawnInterval);_itemSpawnInterval=null;}
@@ -5177,19 +5178,20 @@ function spawnDmg(x,y,dmg,isCrit,armorHit){
 }
 
 // ══════════════════════════════════════════════════════════════
-//  AI TỔNG HỢP 4 THUẬT TOÁN
+// ══════════════════════════════════════════════════════════════
+// AI ENGINE — v3.0 (Chuyên gia)
 //
-//  1. A*            → Tìm path đến đích (tránh tường)
-//  2. Hill Climbing → Chọn vị trí đứng chiến thuật tốt nhất
-//  3. Simulated Annealing → Né đạn linh hoạt / phá thế cục
-//  4. Minimax + Alpha-Beta → Quyết định bắn / lùi / reload
-// ══════════════════════════════════════════════════════════════
-
-
-// ══════════════════════════════════════════════════════════════
-// AI — ĐƠN GIẢN, KHÔNG LAG
-// Dùng: SA (né đạn) + HC (vị trí) + A* (đường đi) + 1-ply eval
-// Không có vòng lặp nặng, không sort mảng lớn, không đệ quy
+// CÁC LỖ HỔNG ĐÃ SỬA:
+//  [FIX #1] aiShootAt: Bắn dự đoán vị trí (Predictive Aiming)
+//           thay vì bắn thẳng vào player.x/y
+//  [FIX #2] A* thật với heuristic Manhattan — không còn là BFS
+//  [FIX #3] dangerScore: Tính hướng + vận tốc đạn — không chỉ khoảng cách
+//
+// 4 THUẬT TOÁN MỚI:
+//  [NEW 1] Predictive Aiming   — Tính chỗ player SẼ đến để bắn
+//  [NEW 2] Influence Map       — Bản đồ nguy hiểm theo hướng đạn
+//  [NEW 3] Cover System        — Chủ động tìm và núp sau tường
+//  [NEW 4] Behavior Tree       — Thay if/else bằng cây trạng thái
 // ══════════════════════════════════════════════════════════════
 
 const DIRS8=[
@@ -5198,15 +5200,14 @@ const DIRS8=[
   {dx:0,dy:0}
 ];
 
-// LOS — kiểm tra tầm nhìn (tối đa 12 bước)
+// ── LOS — kiểm tra tầm nhìn ──
 function los(a,b){
   const ax=a.x+TS/2,ay=a.y+TS/2,bx=b.x+TS/2,by=b.y+TS/2;
   const dx=bx-ax,dy=by-ay,len=Math.hypot(dx,dy);
   if(len<1)return true;
-  const steps=Math.min(12,Math.ceil(len/40));
+  const steps=Math.min(14,Math.ceil(len/35));
   for(let i=1;i<steps;i++){
-    const t=i/steps;
-    const cx=ax+dx*t,cy=ay+dy*t;
+    const t=i/steps,cx=ax+dx*t,cy=ay+dy*t;
     for(const o of obs) if(cx>=o.x&&cx<=o.x+o.w&&cy>=o.y&&cy<=o.y+o.h) return false;
   }
   return true;
@@ -5228,84 +5229,167 @@ function nearItem(pos,type){
   return best;
 }
 
-// ── Danger score — KHÔNG cache (đơn giản, ít đạn nên nhanh) ──
-function dangerScore(bx,by){
-  let d=0;
+// ══════════════════════════════════════════════════════════════
+// [FIX #3 + NEW 2] INFLUENCE MAP — Bản đồ nguy hiểm theo hướng đạn
+// Cải thiện dangerScore() cũ: tính hướng đạn, không chỉ khoảng cách
+// Grid 28×17 ô (40px/ô), update mỗi 80ms để không lag
+// ══════════════════════════════════════════════════════════════
+const IM_CELL=40;
+const IM_W=Math.ceil(W/IM_CELL), IM_H=Math.ceil(H/IM_CELL);
+let influenceMap=new Float32Array(IM_W*IM_H);
+let imLastUpdate=0;
+
+function updateInfluenceMap(){
+  const now=Date.now();
+  if(now-imLastUpdate<80) return; // throttle 80ms
+  imLastUpdate=now;
+  influenceMap.fill(0);
   for(const b of bullets){
-    if(b.ownerId!==myId) continue;
-    const dd=Math.hypot(bx-b.x,by-b.y);
-    if(dd>120) continue;
-    // Chỉ tính khoảng cách hiện tại — đủ để né
-    d+=Math.max(0,120-dd)*1.5;
+    if(b.ownerId!==myId) continue; // chỉ đạn của player gây nguy hiểm cho bot
+    const bspd=Math.hypot(b.vx,b.vy);
+    if(bspd<0.1) continue;
+    // Chiếu tia đạn về phía trước 8 bước
+    for(let step=0;step<=8;step++){
+      const fx=b.x+b.vx*step*2;
+      const fy=b.y+b.vy*step*2;
+      const gx=fx/IM_CELL|0;
+      const gy=fy/IM_CELL|0;
+      if(gx<0||gx>=IM_W||gy<0||gy>=IM_H) break;
+      // Tường chặn = dừng lan truyền
+      if(obs.some(o=>rHit(fx-4,fy-4,8,8,o.x,o.y,o.w,o.h))) break;
+      // Điểm nguy hiểm giảm theo khoảng cách + lan rộng xung quanh
+      const decay=Math.max(0,1-step*0.1);
+      const idx=gy*IM_W+gx;
+      influenceMap[idx]+=decay*120;
+      // Lan sang ô kề (bán kính 1)
+      if(gx>0)    influenceMap[gy*IM_W+(gx-1)]+=decay*50;
+      if(gx<IM_W-1) influenceMap[gy*IM_W+(gx+1)]+=decay*50;
+      if(gy>0)    influenceMap[(gy-1)*IM_W+gx]+=decay*50;
+      if(gy<IM_H-1) influenceMap[(gy+1)*IM_W+gx]+=decay*50;
+    }
   }
-  return d;
 }
 
-// ── A* — dùng priority queue đơn giản, tối đa 150 iter ──
+function imDangerAt(x,y){
+  const gx=Math.max(0,Math.min(IM_W-1,x/IM_CELL|0));
+  const gy=Math.max(0,Math.min(IM_H-1,y/IM_CELL|0));
+  return influenceMap[gy*IM_W+gx];
+}
+
+// ══════════════════════════════════════════════════════════════
+// [FIX #2] A* THẬT với Heuristic Manhattan
+// Không còn là BFS — dùng min-heap đơn giản (array sort nhỏ)
+// f(n) = g(n) + h(n), h = Manhattan distance đến đích
+// ══════════════════════════════════════════════════════════════
 const GRID_CELL=40,GW=Math.ceil(W/GRID_CELL),GH=Math.ceil(H/GRID_CELL);
 let walkGrid=null;
+
 function buildWalkGrid(){
   walkGrid=[];
   for(let gy=0;gy<GH;gy++){
     walkGrid[gy]=[];
     for(let gx=0;gx<GW;gx++){
-      walkGrid[gy][gx]=!obs.some(o=>rHit(gx*GRID_CELL,gy*GRID_CELL,GRID_CELL,GRID_CELL,o.x,o.y,o.w,o.h));
+      walkGrid[gy][gx]=!obs.some(o=>rHit(
+        gx*GRID_CELL,gy*GRID_CELL,GRID_CELL,GRID_CELL,o.x,o.y,o.w,o.h
+      ));
     }
   }
 }
+
 function astar(sx,sy,tx,ty){
   if(!walkGrid) buildWalkGrid();
-  const sgx=sx/GRID_CELL|0, sgy=sy/GRID_CELL|0;
-  const egx=tx/GRID_CELL|0, egy=ty/GRID_CELL|0;
+  const sgx=Math.max(0,Math.min(GW-1,sx/GRID_CELL|0));
+  const sgy=Math.max(0,Math.min(GH-1,sy/GRID_CELL|0));
+  const egx=Math.max(0,Math.min(GW-1,tx/GRID_CELL|0));
+  const egy=Math.max(0,Math.min(GH-1,ty/GRID_CELL|0));
   if(sgx===egx&&sgy===egy) return null;
 
-  // BFS đơn giản thay vì A* sort — không cần sort array, đủ cho map nhỏ
-  const visited=new Uint8Array(GW*GH);
-  const parent=new Int32Array(GW*GH).fill(-1);
-  const queue=[sgy*GW+sgx];
-  visited[sgy*GW+sgx]=1;
-  const NB4=[{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
-  let iter=0,found=false;
+  const N=GW*GH;
+  const gCost=new Float32Array(N).fill(Infinity);
+  const parent=new Int32Array(N).fill(-1);
+  const closed=new Uint8Array(N);
+  const startIdx=sgy*GW+sgx;
+  const goalIdx=egy*GW+egx;
 
-  while(queue.length&&iter++<150){
-    const idx=queue.shift();
-    const cx=idx%GW, cy=idx/GW|0;
-    if(cx===egx&&cy===egy){found=true;break;}
+  gCost[startIdx]=0;
+  // Min-heap: [fCost, idx]
+  const open=[[0,startIdx]];
+
+  const NB4=[{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+  // Chéo: cost sqrt(2) ≈ 1.414
+  const NB8D=[{dx:1,dy:1},{dx:-1,dy:1},{dx:1,dy:-1},{dx:-1,dy:-1}];
+
+  let iter=0;
+  while(open.length&&iter++<200){
+    // Pop phần tử có fCost nhỏ nhất
+    open.sort((a,b)=>a[0]-b[0]);
+    const [,cur]=open.shift();
+    if(cur===goalIdx) break;
+    if(closed[cur]) continue;
+    closed[cur]=1;
+
+    const cx=cur%GW, cy=cur/GW|0;
+
+    // 4 hướng thẳng (cost=1)
     for(const nb of NB4){
-      const nx=cx+nb.dx,ny=cy+nb.dy;
+      const nx=cx+nb.dx, ny=cy+nb.dy;
       if(nx<0||nx>=GW||ny<0||ny>=GH) continue;
       if(!walkGrid[ny][nx]) continue;
       const nidx=ny*GW+nx;
-      if(visited[nidx]) continue;
-      visited[nidx]=1;
-      parent[nidx]=idx;
-      queue.push(nidx);
+      if(closed[nidx]) continue;
+      const ng=gCost[cur]+1;
+      if(ng<gCost[nidx]){
+        gCost[nidx]=ng;
+        parent[nidx]=cur;
+        // h(n) = Manhattan distance
+        const h=Math.abs(nx-egx)+Math.abs(ny-egy);
+        open.push([ng+h, nidx]);
+      }
+    }
+    // 4 hướng chéo (cost=1.414) — chỉ nếu cả 2 ô kề đều trống
+    for(const nb of NB8D){
+      const nx=cx+nb.dx, ny=cy+nb.dy;
+      if(nx<0||nx>=GW||ny<0||ny>=GH) continue;
+      if(!walkGrid[ny][nx]) continue;
+      // Kiểm tra corner-cutting: không đi chéo qua góc tường
+      if(!walkGrid[cy][cx+nb.dx]||!walkGrid[cy+nb.dy][cx]) continue;
+      const nidx=ny*GW+nx;
+      if(closed[nidx]) continue;
+      const ng=gCost[cur]+1.414;
+      if(ng<gCost[nidx]){
+        gCost[nidx]=ng;
+        parent[nidx]=cur;
+        const h=Math.abs(nx-egx)+Math.abs(ny-egy);
+        open.push([ng+h, nidx]);
+      }
     }
   }
 
-  if(!found) return null;
+  if(parent[goalIdx]===-1) return null;
   // Truy ngược path → lấy bước đầu tiên
-  const goal=egy*GW+egx;
-  let cur=goal;
-  while(parent[cur]!==-1&&parent[cur]!==(sgy*GW+sgx)) cur=parent[cur];
+  let cur=goalIdx;
+  while(parent[cur]!==-1 && parent[cur]!==startIdx) cur=parent[cur];
   const fx=(cur%GW)*GRID_CELL, fy=(cur/GW|0)*GRID_CELL;
   return{dx:Math.sign(fx-sx)||0, dy:Math.sign(fy-sy)||0};
 }
 
-// ── Hill Climbing — đơn giản, 8 hướng ──
+// ══════════════════════════════════════════════════════════════
+// Hill Climbing — dùng Influence Map thay dangerScore cũ
+// ══════════════════════════════════════════════════════════════
 function hcScore(px,py,tgt,aggr){
   let s=0;
   const d=Math.hypot(px-tgt.x,py-tgt.y);
   if(los({x:px,y:py},tgt)) s+=100;
   const ideal=200-aggr*80;
   s+=Math.max(0,80-Math.abs(d-ideal)*0.5);
-  // Phạt nặng hơn khi ở góc (cách 2 tường cùng lúc)
-  const nearLeft=px<60, nearRight=px>W-TS-60, nearTop=py<60, nearBot=py>H-TS-60;
   if(px<40||px>W-TS-40||py<40||py>H-TS-40) s-=80;
-  if((nearLeft||nearRight)&&(nearTop||nearBot)) s-=200; // góc map = trừ nặng
-  s-=dangerScore(px,py)*0.5;
+  const nearLeft=px<60,nearRight=px>W-TS-60,nearTop=py<60,nearBot=py>H-TS-60;
+  if((nearLeft||nearRight)&&(nearTop||nearBot)) s-=200;
+  // [FIX #3] Dùng Influence Map thay dangerScore đơn giản
+  s-=imDangerAt(px,py)*0.6;
   return s;
 }
+
 function hillClimb(bot,tgt,aggr){
   const step=GRID_CELL*2;
   let best=hcScore(bot.x,bot.y,tgt,aggr),dir={dx:0,dy:0};
@@ -5319,18 +5403,18 @@ function hillClimb(bot,tgt,aggr){
   return dir;
 }
 
-// ── Simulated Annealing — né đạn ──
+// ── Simulated Annealing — dùng Influence Map ──
 let saTemp=50;const SA_COOL=0.9;
 function simulatedAnneal(bot){
-  const cur=dangerScore(bot.x,bot.y);
-  if(cur<10){saTemp=Math.max(3,saTemp*SA_COOL);return null;}
-  saTemp=Math.min(100,saTemp+cur*0.4);
+  const cur=imDangerAt(bot.x,bot.y);
+  if(cur<15){saTemp=Math.max(3,saTemp*SA_COOL);return null;}
+  saTemp=Math.min(100,saTemp+cur*0.3);
   let bDir=null,bD=cur;
   for(const d of DIRS8){
     if(!d.dx&&!d.dy) continue;
     const tx=bot.x+d.dx*bot.speed*3,ty=bot.y+d.dy*bot.speed*3;
     if(!canPlace(tx,ty)) continue;
-    const nd=dangerScore(tx,ty);
+    const nd=imDangerAt(tx,ty);
     if(nd<bD){bD=nd;bDir={dx:d.dx,dy:d.dy};}
   }
   saTemp*=SA_COOL;
@@ -5338,264 +5422,450 @@ function simulatedAnneal(bot){
 }
 
 // ══════════════════════════════════════════════════════════════
-// THUẬT TOÁN MỚI 1: NAIVE BAYES — Phân loại phong cách đối thủ
-// Quan sát hành vi player mỗi 20 frames → phân loại 3 kiểu:
-//   aggressive (hung hãng) | defensive (phòng thủ) | sniper (bắn tỉa)
-// Sau đó điều chỉnh chiến thuật bot cho phù hợp
+// [NEW 1] PREDICTIVE AIMING — Bắn dự đoán vị trí tương lai
+// Giải phương trình: |bulletPos(t) - playerPos(t)| = 0
+// t = thời gian đạn bay đến vị trí dự đoán
+// Dùng 2 vòng lặp Newton (nhanh, chính xác)
 // ══════════════════════════════════════════════════════════════
-const NaiveBayes = (() => {
-  const CLASSES = ['aggressive', 'defensive', 'sniper'];
+function predictAimTarget(shooter, target){
+  const cx=shooter.x+TS/2, cy=shooter.y+TS/2;
+  const tx=target.x+TS/2,  ty=target.y+TS/2;
+  const isCannon=shooter.gun.id==='cannon';
+  const bspd=(isCannon?9:shooter.gun.bspd)*(shooter.bMult||1);
 
-  // P(feature | class) — Phân phối Gaussian {mean, std}
-  // Được xác định từ kiến thức về phong cách chơi trong game
-  const LIKELIHOOD = {
-    aggressive: {
-      moveRate:  { mean: 0.85, std: 0.12 }, // di chuyển liên tục
-      shootRate: { mean: 0.72, std: 0.14 }, // bắn nhiều
-      avgDist:   { mean: 200,  std: 70  },  // tiếp cận sát
-      coverTime: { mean: 0.08, std: 0.07 }, // ít ẩn nấp
-    },
-    defensive: {
-      moveRate:  { mean: 0.45, std: 0.15 },
-      shootRate: { mean: 0.35, std: 0.14 },
-      avgDist:   { mean: 380,  std: 100 },  // giữ khoảng cách
-      coverTime: { mean: 0.65, std: 0.14 }, // ẩn nấp nhiều
-    },
-    sniper: {
-      moveRate:  { mean: 0.18, std: 0.10 }, // hầu như đứng yên
-      shootRate: { mean: 0.22, std: 0.10 }, // bắn ít nhưng chính xác
-      avgDist:   { mean: 520,  std: 130 },  // xa nhất có thể
-      coverTime: { mean: 0.38, std: 0.14 },
-    },
-  };
-  const PRIORS = { aggressive: 1/3, defensive: 1/3, sniper: 1/3 };
+  // Tốc độ di chuyển của player (pixel/frame) — dùng dirX/dirY + speed
+  const pvx=(target.dirX||0)*target.speed;
+  const pvy=(target.dirY||0)*target.speed;
 
-  // Gaussian PDF
-  function gPDF(x, m, s) {
-    return Math.exp(-0.5 * ((x - m) / s) ** 2) / (s * 2.5066) + 1e-9;
+  // Nếu player đứng yên → bắn thẳng
+  if(Math.abs(pvx)<0.01&&Math.abs(pvy)<0.01) return {x:target.x,y:target.y};
+
+  // Iterative solve: t = dist(cx,cy → px+pvx*t, py+pvy*t) / bspd
+  let t=Math.hypot(tx-cx,ty-cy)/bspd;
+  for(let i=0;i<3;i++){
+    const px2=tx+pvx*t, py2=ty+pvy*t;
+    t=Math.hypot(px2-cx,py2-cy)/bspd;
   }
 
-  let observations = [], playerStyle = 'aggressive';
-  let prevPos = null, shotF = 0, obsF = 0;
-  let _nbHudTimer = 0;
+  const aimX=tx+pvx*t;
+  const aimY=ty+pvy*t;
 
-  function classify() {
-    if (observations.length < 6) return;
-    const n  = observations.length;
-    const mr = observations.reduce((s,o)=>s+o.moved, 0) / n;
-    const sr = observations.reduce((s,o)=>s+o.shot,  0) / n;
-    const ad = observations.reduce((s,o)=>s+o.dist,  0) / n;
-    const ct = observations.reduce((s,o)=>s+o.cover, 0) / n;
-    let best = '', bestScore = -Infinity;
-    for (const cls of CLASSES) {
-      const L = LIKELIHOOD[cls];
-      const lp = Math.log(PRIORS[cls])
-        + Math.log(gPDF(mr, L.moveRate.mean,  L.moveRate.std))
-        + Math.log(gPDF(sr, L.shootRate.mean, L.shootRate.std))
-        + Math.log(gPDF(ad, L.avgDist.mean,   L.avgDist.std))
-        + Math.log(gPDF(ct, L.coverTime.mean, L.coverTime.std));
-      if (lp > bestScore) { bestScore = lp; best = cls; }
+  // Clamp trong map
+  return{
+    x:Math.max(0,Math.min(W-TS,aimX-TS/2)),
+    y:Math.max(0,Math.min(H-TS,aimY-TS/2))
+  };
+}
+
+// ══════════════════════════════════════════════════════════════
+// [NEW 3] COVER SYSTEM — Chủ động núp sau tường
+// Tìm obstacle nào chặn đường thẳng từ player đến bot
+// Ưu tiên khi: HP thấp, đang reload, hoặc HP bot < player
+// ══════════════════════════════════════════════════════════════
+let coverTarget=null, coverTick=0;
+
+function findCoverPosition(bot,tgt){
+  const now=Date.now();
+  if(now-coverTick<400&&coverTarget) return coverTarget; // cache 400ms
+  coverTick=now;
+
+  let bestScore=-Infinity, bestPos=null;
+
+  for(const o of obs){
+    // Thử 4 điểm xung quanh obstacle (mỗi cạnh)
+    const candidates=[
+      {x:o.x-TS-4,       y:o.y+o.h/2-TS/2},  // trái
+      {x:o.x+o.w+4,      y:o.y+o.h/2-TS/2},  // phải
+      {x:o.x+o.w/2-TS/2, y:o.y-TS-4},         // trên
+      {x:o.x+o.w/2-TS/2, y:o.y+o.h+4},        // dưới
+    ];
+    for(const c of candidates){
+      if(!canPlace(c.x,c.y)) continue;
+      // Điểm cover tốt = che được LOS từ player
+      const coveredFromPlayer=!los({x:c.x,y:c.y},tgt);
+      if(!coveredFromPlayer) continue;
+
+      let score=0;
+      // Gần bot → dễ đến
+      score-=Math.hypot(bot.x-c.x,bot.y-c.y)*0.015;
+      // Xa player → an toàn hơn
+      score+=Math.min(200,Math.hypot(tgt.x-c.x,tgt.y-c.y))*0.1;
+      // Tránh vùng nguy hiểm
+      score-=imDangerAt(c.x,c.y)*0.4;
+      // Tránh góc map
+      if(c.x<50||c.x>W-TS-50||c.y<50||c.y>H-TS-50) score-=60;
+
+      if(score>bestScore){bestScore=score;bestPos=c;}
     }
-    if (best !== playerStyle) {
-      console.log(`[Naive Bayes] Style thay đổi: ${playerStyle} → ${best}`);
-      playerStyle = best;
+  }
+  coverTarget=bestPos;
+  return bestPos;
+}
+
+// ══════════════════════════════════════════════════════════════
+// NAIVE BAYES — Phân loại phong cách đối thủ (giữ nguyên, đã tốt)
+// ══════════════════════════════════════════════════════════════
+const NaiveBayes = (() => {
+  const CLASSES=['aggressive','defensive','sniper'];
+  const LIKELIHOOD={
+    aggressive:{moveRate:{mean:0.85,std:0.12},shootRate:{mean:0.72,std:0.14},avgDist:{mean:200,std:70},coverTime:{mean:0.08,std:0.07}},
+    defensive: {moveRate:{mean:0.45,std:0.15},shootRate:{mean:0.35,std:0.14},avgDist:{mean:380,std:100},coverTime:{mean:0.65,std:0.14}},
+    sniper:    {moveRate:{mean:0.18,std:0.10},shootRate:{mean:0.22,std:0.10},avgDist:{mean:520,std:130},coverTime:{mean:0.38,std:0.14}},
+  };
+  const PRIORS={aggressive:1/3,defensive:1/3,sniper:1/3};
+  function gPDF(x,m,s){return Math.exp(-0.5*((x-m)/s)**2)/(s*2.5066)+1e-9;}
+  let observations=[],playerStyle='aggressive',prevPos=null,shotF=0,obsF=0;
+
+  function classify(){
+    if(observations.length<6)return;
+    const n=observations.length;
+    const mr=observations.reduce((s,o)=>s+o.moved,0)/n;
+    const sr=observations.reduce((s,o)=>s+o.shot,0)/n;
+    const ad=observations.reduce((s,o)=>s+o.dist,0)/n;
+    const ct=observations.reduce((s,o)=>s+o.cover,0)/n;
+    let best='',bs=-Infinity;
+    for(const cls of CLASSES){
+      const L=LIKELIHOOD[cls];
+      const lp=Math.log(PRIORS[cls])
+        +Math.log(gPDF(mr,L.moveRate.mean,L.moveRate.std))
+        +Math.log(gPDF(sr,L.shootRate.mean,L.shootRate.std))
+        +Math.log(gPDF(ad,L.avgDist.mean,L.avgDist.std))
+        +Math.log(gPDF(ct,L.coverTime.mean,L.coverTime.std));
+      if(lp>bs){bs=lp;best=cls;}
     }
-    // Cập nhật HUD
-    _nbHudTimer++;
+    if(best!==playerStyle){
+      console.log(`[NaiveBayes] ${playerStyle} → ${best}`);
+      playerStyle=best;
+    }
     updateNBHud();
   }
 
-  return {
-    get style() { return playerStyle; },
-    get obsCount() { return observations.length; },
-
-    observe(player, bot, obstacles) {
+  return{
+    get style(){return playerStyle;},
+    get obsCount(){return observations.length;},
+    observe(player,bot,obstacles){
       obsF++;
-      // Đếm shot: được gọi từ aiShootAt
-      const moved = prevPos ? Math.hypot(player.x-prevPos.x, player.y-prevPos.y) > 6 : false;
-
-      if (obsF < 20) { if (moved) {} prevPos = {x:player.x,y:player.y}; return; }
-
-      const dist = Math.hypot(player.x - bot.x, player.y - bot.y);
-      let cover = false;
-      for (const o of obstacles) {
-        if (Math.hypot(player.x+TS/2 - o.x-o.w/2, player.y+TS/2 - o.y-o.h/2) < 75) { cover=true; break; }
-      }
-      observations.push({ moved: moved?1:0, shot: shotF/obsF, dist, cover: cover?1:0 });
-      if (observations.length > 25) observations.shift();
-      prevPos = {x:player.x, y:player.y};
-      shotF = 0; obsF = 0;
+      const moved=prevPos?Math.hypot(player.x-prevPos.x,player.y-prevPos.y)>6:false;
+      if(obsF<20){prevPos={x:player.x,y:player.y};return;}
+      const dist=Math.hypot(player.x-bot.x,player.y-bot.y);
+      let cover=false;
+      for(const o of obstacles) if(Math.hypot(player.x+TS/2-o.x-o.w/2,player.y+TS/2-o.y-o.h/2)<75){cover=true;break;}
+      observations.push({moved:moved?1:0,shot:shotF/obsF,dist,cover:cover?1:0});
+      if(observations.length>25)observations.shift();
+      prevPos={x:player.x,y:player.y};shotF=0;obsF=0;
       classify();
     },
-
-    noteShot() { shotF++; },
-
-    reset() { observations=[]; playerStyle='aggressive'; prevPos=null; shotF=0; obsF=0; },
-
-    // Config chiến thuật bot ứng với mỗi style
-    config() {
-      return {
-        aggressive: { preferDist:160, fireThresh:0.75 }, // rush lại, bắn sớm
-        defensive:  { preferDist:300, fireThresh:1.10 }, // giữ khoảng, chờ thời điểm
-        sniper:     { preferDist:130, fireThresh:0.65 }, // rush sát sniper, bắn liên tục
+    noteShot(){shotF++;},
+    reset(){observations=[];playerStyle='aggressive';prevPos=null;shotF=0;obsF=0;coverTarget=null;walkGrid=null;},
+    config(){
+      return{
+        aggressive:{preferDist:160,fireThresh:0.75},
+        defensive: {preferDist:300,fireThresh:1.10},
+        sniper:    {preferDist:130,fireThresh:0.65},
       }[playerStyle];
     },
   };
 })();
 
-function updateNBHud() {
-  let el = document.getElementById('nb-hud');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'nb-hud';
-    el.style.cssText = `position:fixed;bottom:70px;left:50%;transform:translateX(-50%);
+function updateNBHud(){
+  let el=document.getElementById('nb-hud');
+  if(!el){
+    el=document.createElement('div');
+    el.id='nb-hud';
+    el.style.cssText=`position:fixed;bottom:70px;left:50%;transform:translateX(-50%);
       font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:3px;
-      padding:5px 18px;border:1px solid;z-index:999;pointer-events:none;
-      background:rgba(0,0,0,.7);opacity:.85;`;
+      padding:5px 18px;border:1px solid;z-index:999;pointer-events:none;background:rgba(0,0,0,.7);`;
     document.body.appendChild(el);
   }
-  const style = NaiveBayes.style;
-  const cols = { aggressive:'#ff5c75', defensive:'#00d4ff', sniper:'#f5c842' };
-  const labels = { aggressive:'⚔ AGGRESSIVE', defensive:'🛡 DEFENSIVE', sniper:'🎯 SNIPER' };
-  el.style.color = cols[style];
-  el.style.borderColor = cols[style];
-  el.textContent = `AI READS: ${labels[style]} (${NaiveBayes.obsCount} obs)`;
-  el.style.display = (typeof running!=='undefined'&&running&&!isOnline) ? 'block' : 'none';
+  const style=NaiveBayes.style;
+  const cols={aggressive:'#ff5c75',defensive:'#00d4ff',sniper:'#f5c842'};
+  const labels={aggressive:'⚔ AGGRESSIVE',defensive:'🛡 DEFENSIVE',sniper:'🎯 SNIPER'};
+  el.style.color=cols[style];el.style.borderColor=cols[style];
+  el.textContent=`AI READS: ${labels[style]} (${NaiveBayes.obsCount} obs)`;
+  el.style.display=(typeof running!=='undefined'&&running&&!isOnline)?'block':'none';
 }
 
 // ══════════════════════════════════════════════════════════════
-// THUẬT TOÁN MỚI 2: ALPHA-BETA PRUNING — Quyết định chiến thuật
-// Minimax 2-ply: Bot(MAX) chọn action → Player(MIN) phản ứng
-// Alpha-Beta cắt tỉa những nhánh không ảnh hưởng kết quả
-//
-// Cấu trúc cây (depth=2):
-//   Bot pick 1 trong 8 actions
-//   └─ Player pick 1 trong 3 reactions  ← cắt ngay nếu α≥β
-//      └─ evaluate() → score
-//
-// Kết quả: chọn action cho bot, trả về có bắn hay không
+// ALPHA-BETA PRUNING — Minimax 2-ply (giữ nguyên, đã tốt)
 // ══════════════════════════════════════════════════════════════
-const AlphaBeta = (() => {
-  // 8 hành động của bot
-  const BOT_ACTIONS = [
-    { name:'stay+shoot',     ddx: 0, ddy: 0,  fire:true  },
-    { name:'advance+shoot',  ddx: 1, ddy: 0,  fire:true  },
-    { name:'retreat+shoot',  ddx:-1, ddy: 0,  fire:true  },
-    { name:'strafe_r+shoot', ddx: 0, ddy: 1,  fire:true  },
-    { name:'strafe_l+shoot', ddx: 0, ddy:-1,  fire:true  },
-    { name:'advance+wait',   ddx: 1, ddy: 0,  fire:false },
-    { name:'retreat+wait',   ddx:-1, ddy: 0,  fire:false },
-    { name:'cover+wait',     ddx: 0, ddy: 1,  fire:false },
+const AlphaBeta=(()=>{
+  const BOT_ACTIONS=[
+    {name:'stay+shoot',ddx:0,ddy:0,fire:true},
+    {name:'advance+shoot',ddx:1,ddy:0,fire:true},
+    {name:'retreat+shoot',ddx:-1,ddy:0,fire:true},
+    {name:'strafe_r+shoot',ddx:0,ddy:1,fire:true},
+    {name:'strafe_l+shoot',ddx:0,ddy:-1,fire:true},
+    {name:'advance+wait',ddx:1,ddy:0,fire:false},
+    {name:'retreat+wait',ddx:-1,ddy:0,fire:false},
+    {name:'cover+wait',ddx:0,ddy:1,fire:false},
   ];
+  const PLR_REACTIONS=[{ddx:1,ddy:0},{ddx:-1,ddy:0},{ddx:0,ddy:1},{ddx:0,ddy:-1}];
+  let _cuts=0,_calls=0;
 
-  // 3 phản ứng dự đoán của player
-  const PLR_REACTIONS = [
-    { ddx: 1, ddy: 0 }, // tiến về bot
-    { ddx:-1, ddy: 0 }, // lùi khỏi bot
-    { ddx: 0, ddy: 1 }, // né ngang
-  ];
-
-  let _cuts = 0, _calls = 0;
-
-  function evaluate(state, preferDist) {
-    const { bx, by, px, py, botHp, plrHp, hasLOS } = state;
-    const dist = Math.hypot(bx-px, by-py);
-    let score = 0;
-
-    // 1. Chênh lệch HP — quan trọng nhất
-    score += (botHp - plrHp) * 4;
-
-    // 2. Khoảng cách lý tưởng (từ Naive Bayes)
-    score -= Math.abs(dist - preferDist) * 0.45;
-
-    // 3. LOS = có thể bắn = lợi thế
-    if (hasLOS) score += 38;
-
-    // 4. Gần cover (obstacle)
-    for (const o of obs) {
-      if (Math.hypot(bx - o.x-o.w/2, by - o.y-o.h/2) < 75) { score += 18; break; }
-    }
-
-    // 5. Phạt khi bị dồn vào tường
-    if (bx < 55 || bx > W-TS-55) score -= 28;
-    if (by < 55 || by > H-TS-55) score -= 28;
-
+  function evaluate(state,preferDist){
+    const{bx,by,px,py,botHp,plrHp,hasLOS}=state;
+    const dist=Math.hypot(bx-px,by-py);
+    let score=(botHp-plrHp)*4;
+    score-=Math.abs(dist-preferDist)*0.45;
+    if(hasLOS)score+=38;
+    for(const o of obs) if(Math.hypot(bx-o.x-o.w/2,by-o.y-o.h/2)<75){score+=18;break;}
+    if(bx<55||bx>W-TS-55)score-=28;
+    if(by<55||by>H-TS-55)score-=28;
+    // Dùng influence map trong đánh giá
+    score-=imDangerAt(bx,by)*0.3;
     return score;
   }
-
-  function simulate(state, bAct, pReact) {
-    const STEP = 45;
-    const nbx = Math.max(0, Math.min(W-TS, state.bx + bAct.ddx * STEP));
-    const nby = Math.max(0, Math.min(H-TS, state.by + bAct.ddy * STEP));
-    const npx = Math.max(0, Math.min(W-TS, state.px + pReact.ddx * STEP));
-    const npy = Math.max(0, Math.min(H-TS, state.py + pReact.ddy * STEP));
-    const nHasLOS = los({ x:nbx, y:nby }, { x:npx, y:npy });
-    // Ước lượng sát thương nếu bắn
-    let nPlrHp = state.plrHp;
-    if (bAct.fire && state.hasLOS) nPlrHp = Math.max(0, state.plrHp - 8);
-    return { bx:nbx, by:nby, px:npx, py:npy, botHp:state.botHp, plrHp:nPlrHp, hasLOS:nHasLOS };
+  function simulate(state,bAct,pReact){
+    const STEP=45;
+    const nbx=Math.max(0,Math.min(W-TS,state.bx+bAct.ddx*STEP));
+    const nby=Math.max(0,Math.min(H-TS,state.by+bAct.ddy*STEP));
+    const npx=Math.max(0,Math.min(W-TS,state.px+pReact.ddx*STEP));
+    const npy=Math.max(0,Math.min(H-TS,state.py+pReact.ddy*STEP));
+    const nHasLOS=los({x:nbx,y:nby},{x:npx,y:npy});
+    let nPlrHp=state.plrHp;
+    if(bAct.fire&&state.hasLOS)nPlrHp=Math.max(0,state.plrHp-8);
+    return{bx:nbx,by:nby,px:npx,py:npy,botHp:state.botHp,plrHp:nPlrHp,hasLOS:nHasLOS};
   }
-
-  // Minimax với Alpha-Beta Pruning (depth=2)
-  function abSearch(state, depth, alpha, beta, isMax, preferDist) {
+  function abSearch(state,depth,alpha,beta,isMax,preferDist){
     _calls++;
-    if (depth === 0) return { score: evaluate(state, preferDist), action: null };
-
-    if (isMax) {
-      // BOT — maximize
-      let best = { score:-Infinity, action: BOT_ACTIONS[0] };
-      for (const bAct of BOT_ACTIONS) {
-        let worstVsThis = Infinity;
-        for (const pReact of PLR_REACTIONS) {
-          const ns = simulate(state, bAct, pReact);
-          const { score } = abSearch(ns, depth-1, alpha, beta, false, preferDist);
-          if (score < worstVsThis) worstVsThis = score;
-          // ✂️ Beta cutoff — player sẽ không chọn phản ứng tệ hơn
-          if (worstVsThis <= alpha) { _cuts++; break; }
-          if (worstVsThis < beta)  beta = worstVsThis;
+    if(depth===0)return{score:evaluate(state,preferDist),action:null};
+    if(isMax){
+      let best={score:-Infinity,action:BOT_ACTIONS[0]};
+      for(const bAct of BOT_ACTIONS){
+        let worst=Infinity;
+        for(const pReact of PLR_REACTIONS){
+          const ns=simulate(state,bAct,pReact);
+          const{score}=abSearch(ns,depth-1,alpha,beta,false,preferDist);
+          if(score<worst)worst=score;
+          if(worst<=alpha){_cuts++;break;}
+          if(worst<beta)beta=worst;
         }
-        if (worstVsThis > best.score) { best.score = worstVsThis; best.action = bAct; }
-        // ✂️ Alpha cutoff
-        if (best.score >= beta) { _cuts++; break; }
-        if (best.score > alpha) alpha = best.score;
+        if(worst>best.score){best.score=worst;best.action=bAct;}
+        if(best.score>=beta){_cuts++;break;}
+        if(best.score>alpha)alpha=best.score;
       }
       return best;
     } else {
-      // PLAYER — minimize
-      let best = { score:Infinity, action: PLR_REACTIONS[0] };
-      for (const pReact of PLR_REACTIONS) {
-        const ns = simulate(state, { ddx:0, ddy:0, fire:false }, pReact);
-        const { score } = abSearch(ns, depth-1, alpha, beta, true, preferDist);
-        if (score < best.score) { best.score = score; best.action = pReact; }
-        if (best.score <= alpha) { _cuts++; break; } // ✂️ Alpha cutoff
-        if (best.score < beta)  beta = best.score;
+      let best={score:Infinity,action:PLR_REACTIONS[0]};
+      for(const pReact of PLR_REACTIONS){
+        const ns=simulate(state,{ddx:0,ddy:0,fire:false},pReact);
+        const{score}=abSearch(ns,depth-1,alpha,beta,true,preferDist);
+        if(score<best.score){best.score=score;best.action=pReact;}
+        if(best.score<=alpha){_cuts++;break;}
+        if(best.score<beta)beta=best.score;
       }
       return best;
     }
   }
-
-  return {
-    get cuts()  { return _cuts;  },
-    get calls() { return _calls; },
-
-    decide(bot, tgt, preferDist) {
-      _cuts = 0; _calls = 0;
-      const state = {
-        bx: bot.x, by: bot.y, px: tgt.x, py: tgt.y,
-        botHp: bot.hp, plrHp: tgt.hp,
-        hasLOS: los(bot, tgt),
-      };
-      const result = abSearch(state, 2, -Infinity, Infinity, true, preferDist);
-      // Log thống kê cắt tỉa (mỗi 5 giây)
-      if (Math.random() < 0.02) {
-        console.log(`[Alpha-Beta] Calls:${_calls} Cuts:${_cuts} (${Math.round(_cuts/_calls*100)||0}% pruned) | Action: ${result.action?.name}`);
-      }
+  return{
+    get cuts(){return _cuts;},
+    get calls(){return _calls;},
+    decide(bot,tgt,preferDist){
+      _cuts=0;_calls=0;
+      const state={bx:bot.x,by:bot.y,px:tgt.x,py:tgt.y,botHp:bot.hp,plrHp:tgt.hp,hasLOS:los(bot,tgt)};
+      const result=abSearch(state,2,-Infinity,Infinity,true,preferDist);
+      if(Math.random()<0.015) console.log(`[Alpha-Beta] Calls:${_calls} Cuts:${_cuts} (${Math.round(_cuts/_calls*100)||0}% pruned) | ${result.action?.name}`);
       return result.action;
     },
   };
 })();
 
-// ── runAI — phối hợp các thuật toán ──
+// ══════════════════════════════════════════════════════════════
+// [NEW 4] BEHAVIOR TREE — Thay thế chuỗi if/else trong runAI
+// 5 trạng thái rõ ràng với điều kiện chuyển trạng thái
+//
+//   DEAD ← HP <= 0
+//   ↑
+//   HEAL     ← HP < 25% VÀ có HP item
+//   COVER    ← đang reload HOẶC HP < 40% HOẶC nguy hiểm cao
+//   CHASE    ← không nhìn thấy player
+//   ENGAGE   ← mặc định (có LOS, bắn và cơ động)
+//   AMBUSH   ← player là sniper → bot rush thẳng
+//
+// Mỗi trạng thái có tick() riêng, chuyển trạng thái mượt mà
+// ══════════════════════════════════════════════════════════════
+const BehaviorTree=(()=>{
+  const STATES={HEAL:'HEAL',COVER:'COVER',CHASE:'CHASE',ENGAGE:'ENGAGE',AMBUSH:'AMBUSH'};
+  let currentState=STATES.ENGAGE;
+  let stateTimer=0;
+  const MIN_STATE_MS=300; // giữ trạng thái tối thiểu 300ms tránh flicker
+
+  function transition(bot,tgt,cfg,now){
+    if(now-stateTimer<MIN_STATE_MS) return currentState;
+    const hpR=bot.hp/(bot.maxHp||100);
+    const dist=Math.hypot(bot.x-tgt.x,bot.y-tgt.y);
+    const lv=los(bot,tgt);
+    const danger=imDangerAt(bot.x,bot.y);
+    const style=NaiveBayes.style;
+
+    let next=currentState;
+
+    // Priority 1: Chạy lấy HP nếu gần chết
+    if(hpR<0.25&&nearItem(bot,'HP')) next=STATES.HEAL;
+    // Priority 2: Tìm cover khi reload / nguy hiểm / HP thấp
+    else if(bot.reloading||(hpR<0.40&&!lv)||(danger>150)) next=STATES.COVER;
+    // Priority 3: Đuổi nếu không thấy
+    else if(!lv&&dist>120) next=STATES.CHASE;
+    // Priority 4: Rush sniper
+    else if(style==='sniper'&&dist>200) next=STATES.AMBUSH;
+    // Default: tấn công
+    else next=STATES.ENGAGE;
+
+    if(next!==currentState){
+      console.log(`[BT] ${currentState} → ${next} (hp:${Math.round(hpR*100)}% d:${Math.round(dist)} lv:${lv})`);
+      currentState=next;
+      stateTimer=now;
+    }
+    return currentState;
+  }
+
+  return{
+    get state(){return currentState;},
+    reset(){currentState=STATES.ENGAGE;stateTimer=0;},
+
+    tick(bot,tgt,cfg,now,aiSpd,aggr){
+      updateInfluenceMap(); // Cập nhật bản đồ nguy hiểm
+      const state=transition(bot,tgt,cfg,now);
+      const lv=los(bot,tgt);
+      const nbCfg=NaiveBayes.config();
+      const abAction=AlphaBeta.decide(bot,tgt,nbCfg.preferDist);
+
+      switch(state){
+
+        case STATES.HEAL:{
+          // Chạy thẳng đến HP item
+          const h=nearItem(bot,'HP');
+          if(!h){currentState=STATES.ENGAGE;break;}
+          const d=cfg.useAstar?astar(bot.x,bot.y,h.x,h.y):null;
+          const dir=d||{dx:Math.sign(h.x-bot.x),dy:Math.sign(h.y-bot.y)};
+          bot.dirX=dir.dx;bot.dirY=dir.dy;
+          move(bot,aiSpd*1.1); // sprint đến HP
+          // Bắn nếu có thể trong khi chạy
+          if(lv&&bot.cd<=0&&bot.mag>0&&!bot.reloading) aiShootPredictive(bot,tgt);
+          break;
+        }
+
+        case STATES.COVER:{
+          // Tìm cover tốt nhất và đi vào đó
+          const cp=findCoverPosition(bot,tgt);
+          if(!cp){currentState=STATES.ENGAGE;break;}
+          const d=cfg.useAstar?astar(bot.x,bot.y,cp.x,cp.y):null;
+          const dir=d||{dx:Math.sign(cp.x-bot.x),dy:Math.sign(cp.y-bot.y)};
+          bot.dirX=dir.dx;bot.dirY=dir.dy;
+          move(bot,aiSpd);
+          // Bắn liếc góc nếu đang reload xong
+          if(lv&&!bot.reloading&&bot.cd<=0&&bot.mag>0) aiShootPredictive(bot,tgt);
+          break;
+        }
+
+        case STATES.CHASE:{
+          // A* đuổi theo player
+          const d=cfg.useAstar?astar(bot.x,bot.y,tgt.x,tgt.y):null;
+          const dir=d||{dx:Math.sign(tgt.x-bot.x),dy:Math.sign(tgt.y-bot.y)};
+          // SA né đạn trong khi đuổi
+          const saD=bullets.length>0?simulatedAnneal(bot):null;
+          const fd=saD||dir;
+          bot.dirX=fd.dx;bot.dirY=fd.dy;
+          move(bot,aiSpd);
+          break;
+        }
+
+        case STATES.AMBUSH:{
+          // Rush thẳng vào sniper + bắn liên tục
+          const saD=bullets.length>0?simulatedAnneal(bot):null;
+          const rd=saD||{dx:Math.sign(tgt.x-bot.x),dy:Math.sign(tgt.y-bot.y)};
+          bot.dirX=rd.dx;bot.dirY=rd.dy;
+          move(bot,aiSpd*1.15); // tốc độ cao hơn khi rush
+          if(lv&&bot.cd<=0&&bot.mag>0&&!bot.reloading) aiShootPredictive(bot,tgt);
+          break;
+        }
+
+        default: // ENGAGE
+        case STATES.ENGAGE:{
+          // SA né đạn trước
+          if(cfg.useSA&&bullets.length>0){
+            const saD=simulatedAnneal(bot);
+            if(saD){bot.dirX=saD.dx;bot.dirY=saD.dy;move(bot,aiSpd);break;}
+          }
+          // Alpha-Beta chọn action
+          if(abAction){
+            bot.dirX=abAction.ddx;bot.dirY=abAction.ddy;
+          } else if(lv&&cfg.useHC){
+            // HC nếu AB không quyết được
+            const hc=hillClimb(bot,tgt,aggr);
+            bot.dirX=hc.dx;bot.dirY=hc.dy;
+          } else {
+            bot.dirX=Math.sign(tgt.x-bot.x);
+            bot.dirY=Math.sign(tgt.y-bot.y);
+          }
+          // Thoát góc
+          if((bot.x<50||bot.x>W-TS-50)&&(bot.y<50||bot.y>H-TS-50)){
+            bot.dirX=Math.sign(W/2-bot.x);bot.dirY=Math.sign(H/2-bot.y);
+          }
+          move(bot,aiSpd);
+          if(abAction?.fire&&lv&&bot.cd<=0&&bot.mag>0&&!bot.reloading){
+            NaiveBayes.noteShot();
+            aiShootPredictive(bot,tgt); // [FIX #1] Dùng Predictive Aiming
+          }
+          break;
+        }
+      }
+    },
+  };
+})();
+
+// ══════════════════════════════════════════════════════════════
+// [FIX #1 + NEW 1] aiShootPredictive — Bắn dự đoán vị trí
+// Thay thế aiShootAt(bot, tgt.x, tgt.y) cũ
+// ══════════════════════════════════════════════════════════════
+function aiShootPredictive(shooter, target){
+  if(shooter.mag<=0||shooter.reloading||shooter.cd>0) return;
+  shooter.mag--;shooter.cd=shooter.gun.cd;
+
+  const cx=shooter.x+TS/2, cy=shooter.y+TS/2;
+  // Lấy vị trí dự đoán
+  const aim=predictAimTarget(shooter,target);
+  const aimCx=aim.x+TS/2, aimCy=aim.y+TS/2;
+
+  // Thêm spread (độ chính xác giảm theo khoảng cách)
+  const dist=Math.hypot(aimCx-cx,aimCy-cy);
+  const spread=shooter.gun.spread*dist*0.4; // spread tỉ lệ khoảng cách
+  const inX=aimCx+(Math.random()-0.5)*spread*2;
+  const inY=aimCy+(Math.random()-0.5)*spread*2;
+  const ang=Math.atan2(inY-cy,inX-cx);
+
+  const isCannon=shooter.gun.id==='cannon';
+  const spd=(isCannon?9:shooter.gun.bspd)*(shooter.bMult||1);
+  const dmg=isCannon?15:shooter.gun.damage;
+  const sz=isCannon?7:shooter.gun.id==='rifle'||shooter.gun.id==='pistol'?4:3;
+
+  bullets.push({
+    x:cx,y:cy,
+    vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,
+    ownerId:shooter.id,dmg,pw:0,sz,isCannon
+  });
+}
+
+// Giữ tên cũ để không break các chỗ gọi
+function aiShootAt(p,tx,ty){
+  // Redirect sang predictive nếu có target đầy đủ
+  const tgt=players.find(pl=>pl.id!==p.id);
+  if(tgt) { aiShootPredictive(p,tgt); return; }
+  // Fallback
+  if(p.mag<=0||p.reloading||p.cd>0)return;
+  p.mag--;p.cd=p.gun.cd;
+  const cx=p.x+TS/2,cy=p.y+TS/2;
+  const ang=Math.atan2(ty+TS/2-cy,tx+TS/2-cx);
+  const isCannon=p.gun.id==='cannon';
+  const spd=(isCannon?9:p.gun.bspd)*(p.bMult||1);
+  const dmg=isCannon?15:p.gun.damage;
+  const sz=isCannon?7:p.gun.id==='rifle'||p.gun.id==='pistol'?4:3;
+  bullets.push({x:cx,y:cy,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,ownerId:p.id,dmg,pw:0,sz,isCannon});
+}
+
+// ══════════════════════════════════════════════════════════════
+// runAI — Điểm vào duy nhất, gọi Behavior Tree
+// ══════════════════════════════════════════════════════════════
 let aiTick=0,aiDec={dx:0,dy:0,fire:false};
 let astarPath=null,astarTick=0;
 let aiStrafeDir=1,aiStrafeTick=0;
@@ -5605,117 +5875,15 @@ function runAI(bot,tgt){
   const cfg=campAiConfig||{useSA:true,useHC:true,useAstar:true,aiSpeedMult:1,fireRateBoost:0};
   const aiSpd=bot.speed*cfg.aiSpeedMult;
   const aggr=cfg.fireRateBoost;
-  const dist=Math.hypot(bot.x-tgt.x,bot.y-tgt.y);
-  const lv=los(bot,tgt);
-  const hpR=bot.hp/(bot.maxHp||300);
 
-  // ── NAIVE BAYES: Quan sát player mỗi frame ──
-  NaiveBayes.observe(tgt, bot, obs);
-  const nbCfg = NaiveBayes.config();
+  // Quan sát player cho Naive Bayes
+  NaiveBayes.observe(tgt,bot,obs);
   updateNBHud();
 
-  // 1. SA né đạn — mỗi frame, nhưng chỉ khi có đạn
-  if(cfg.useSA&&bullets.length>0){
-    const saDir=simulatedAnneal(bot);
-    if(saDir){
-      bot.dirX=saDir.dx;bot.dirY=saDir.dy;
-      move(bot,aiSpd);
-      if(lv&&bot.cd<=0&&bot.mag>0&&!bot.reloading) aiShootAt(bot,tgt.x,tgt.y);
-      return;
-    }
-  }
-
-  // 2. Tick chiến thuật: 250ms cố định (không scale theo ải — tránh lag)
-  if(now-aiTick<250) {
-    // Vẫn move + bắn theo quyết định cũ
-    bot.dirX=aiDec.dx;bot.dirY=aiDec.dy;
-    move(bot,aiSpd);
-    if(aiDec.fire&&bot.cd<=0&&bot.mag>0&&!bot.reloading) aiShootAt(bot,tgt.x,tgt.y);
-    return;
-  }
-  aiTick=now;
-
-  let dir={dx:0,dy:0};
-
-  // 3. Ưu tiên item khi HP thấp
-  if(hpR<0.25){
-    const h=nearItem(bot,'HP');
-    if(h){
-      if(cfg.useAstar){
-        if(now-astarTick>500){astarTick=now;astarPath=astar(bot.x,bot.y,h.x,h.y);}
-        dir=astarPath||{dx:Math.sign(h.x-bot.x),dy:Math.sign(h.y-bot.y)};
-      } else dir={dx:Math.sign(h.x-bot.x),dy:Math.sign(h.y-bot.y)};
-      aiDec.dx=dir.dx;aiDec.dy=dir.dy;aiDec.fire=lv&&dist<280&&bot.cd<=0&&bot.mag>0&&!bot.reloading;
-      bot.dirX=dir.dx;bot.dirY=dir.dy;move(bot,aiSpd);
-      if(aiDec.fire) aiShootAt(bot,tgt.x,tgt.y);
-      return;
-    }
-  }
-
-  // 4. Thiếu đạn → lấy ammo
-  if(bot.mag<=1&&bot.ammo>0&&!bot.reloading){
-    const am=nearItem(bot,'AMMO');
-    if(am){
-      dir=cfg.useAstar?astar(bot.x,bot.y,am.x,am.y)||{dx:Math.sign(am.x-bot.x),dy:Math.sign(am.y-bot.y)}:{dx:Math.sign(am.x-bot.x),dy:Math.sign(am.y-bot.y)};
-    }
-  }
-
-  // 5. Không có LOS → A* tìm đường đến player
-  else if(!lv&&dist>100){
-    if(cfg.useAstar){
-      if(now-astarTick>500){astarTick=now;astarPath=astar(bot.x,bot.y,tgt.x,tgt.y);}
-      if(astarPath) dir=astarPath;
-      else dir={dx:Math.sign(tgt.x-bot.x),dy:Math.sign(tgt.y-bot.y)};
-    } else dir={dx:Math.sign(tgt.x-bot.x),dy:Math.sign(tgt.y-bot.y)};
-  }
-
-  // 6. Có LOS → HC chọn vị trí tốt + đánh vòng
-  else if(lv){
-    // Đánh vòng quanh player
-    if(now-aiStrafeTick>600){aiStrafeTick=now;aiStrafeDir*=-1;}
-    const ang=Math.atan2(bot.y-tgt.y,bot.x-tgt.x);
-    const px=Math.cos(ang+Math.PI/2*aiStrafeDir);
-    const py=Math.sin(ang+Math.PI/2*aiStrafeDir);
-    const rb=0.3+aggr*0.4;
-    dir={
-      dx:Math.sign(Math.sign(tgt.x-bot.x)*rb+px*(1-rb)),
-      dy:Math.sign(Math.sign(tgt.y-bot.y)*rb+py*(1-rb))
-    };
-    // HC override nếu tìm được vị trí tốt hơn
-    if(cfg.useHC){
-      const hc=hillClimb(bot,tgt,aggr);
-      if(hc.dx||hc.dy) dir=hc;
-    }
-    astarPath=null;
-  }
-
-  // 7. Fallback: tiến thẳng vào
-  else {
-    dir={dx:Math.sign(tgt.x-bot.x),dy:Math.sign(tgt.y-bot.y)};
-  }
-
-  // Thoát góc: nếu AI bị kẹt ở góc map → đẩy vào trung tâm
-  const inCornerX = bot.x < 50 || bot.x > W-TS-50;
-  const inCornerY = bot.y < 50 || bot.y > H-TS-50;
-  if(inCornerX && inCornerY){
-    dir = {dx: Math.sign(W/2 - bot.x), dy: Math.sign(H/2 - bot.y)};
-  }
-
-  // ── ALPHA-BETA PRUNING: Quyết định bắn thông minh ──
-  // Thay thế: aiDec.fire = lv && dist < fireRange (đơn giản)
-  // Bằng: Minimax 2-ply có cắt tỉa alpha-beta
-  const abAction = AlphaBeta.decide(bot, tgt, nbCfg.preferDist);
-  const shouldFire = abAction.fire && lv && bot.cd<=0 && bot.mag>0 && !bot.reloading;
-
-  // Kết hợp: hướng từ HC/A*/SA, quyết định bắn từ Alpha-Beta
-  aiDec.dx = dir.dx;
-  aiDec.dy = dir.dy;
-  aiDec.fire = shouldFire;
-
-  bot.dirX=aiDec.dx;bot.dirY=aiDec.dy;
-  move(bot,aiSpd);
-  if(aiDec.fire){ NaiveBayes.noteShot(); aiShootAt(bot,tgt.x,tgt.y); }
+  // Tick Behavior Tree (xử lý toàn bộ quyết định)
+  BehaviorTree.tick(bot,tgt,cfg,now,aiSpd,aggr);
 }
+
 
 function updateHUD(){
   // Xác định slot đúng: nếu online và mình là player 2 thì slot mình = '2'
