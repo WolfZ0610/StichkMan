@@ -3100,7 +3100,10 @@ const STAGES=[
     desc:'Chiến trường mở, vài thân cây to che khuất. AI chậm, chỉ Minimax cơ bản.',
     tags:['Minimax Depth 1','Không SA/HC','Tốc 55%'],
     aiChar:'warrior', aiGun:'smg',
-    aiSpeedMult:0.55, minimaxDepth:1, useSA:false, useHC:false, useAstar:false,
+    aiSpeedMult:0.55, minimaxDepth:1,
+    useSA:false, useHC:false, useAstar:false,
+    usePredictive:false, useIM:false, useCover:false, useNB:false,
+    btStates:['ENGAGE'],
     hpBonus:0, fireRateBoost:0, coinReward:30,
     map:[
       // 4 "thân cây" lớn — tròn viền xanh lá
@@ -3127,7 +3130,10 @@ const STAGES=[
     desc:'Khối đá sa mạc tạo hành lang hẹp. AI dùng Hill Climbing tìm góc khuất.',
     tags:['Hill Climbing','Minimax D2','Tốc 75%'],
     aiChar:'assassin', aiGun:'rifle',
-    aiSpeedMult:0.75, minimaxDepth:2, useSA:false, useHC:true, useAstar:false,
+    aiSpeedMult:0.75, minimaxDepth:2,
+    useSA:false, useHC:true, useAstar:false,
+    usePredictive:true, useIM:false, useCover:false, useNB:false,
+    btStates:['ENGAGE','CHASE','HEAL'],
     hpBonus:30, fireRateBoost:0.1, coinReward:60,
     map:[
       // Tường ngang trên-dưới tạo hành lang
@@ -3154,7 +3160,10 @@ const STAGES=[
     desc:'Mê cung kênh ngầm. SA né đạn phản xạ. Cần chiến thuật tầm gần.',
     tags:['SA Né Đạn','HC+Minimax','Súng Lục Nhanh'],
     aiChar:'sniper', aiGun:'pistol',
-    aiSpeedMult:0.88, minimaxDepth:2, useSA:true, useHC:true, useAstar:false,
+    aiSpeedMult:0.88, minimaxDepth:2,
+    useSA:true, useHC:true, useAstar:false,
+    usePredictive:true, useIM:true, useCover:false, useNB:false,
+    btStates:['ENGAGE','CHASE','HEAL'],
     hpBonus:60, fireRateBoost:0.15, coinReward:100,
     map:[
       // Tường dài tạo kênh L-shape
@@ -3181,7 +3190,10 @@ const STAGES=[
     desc:'Vòng tường đồng tâm ngăn đường. A* tìm lối vòng, AI tấn công không ngừng.',
     tags:['Full A*','SA+HC+Minimax D3','Chiến Tăng +HP'],
     aiChar:'tank', aiGun:'rifle',
-    aiSpeedMult:0.98, minimaxDepth:3, useSA:true, useHC:true, useAstar:true,
+    aiSpeedMult:0.98, minimaxDepth:3,
+    useSA:true, useHC:true, useAstar:true,
+    usePredictive:true, useIM:true, useCover:true, useNB:true,
+    btStates:['ENGAGE','CHASE','HEAL','COVER','AMBUSH'],
     hpBonus:100, fireRateBoost:0.2, coinReward:150,
     map:[
       // Vòng ngoài — 4 đoạn tường để 4 lối vào
@@ -3207,7 +3219,10 @@ const STAGES=[
     desc:'BOSS CUỐI. Mê cung tím ngục tối. AI depth 4 toàn năng + súng Pháo + HP max.',
     tags:['Full AI Max','Minimax Depth 4','BOSS · Súng Pháo'],
     aiChar:'tank', aiGun:'cannon',
-    aiSpeedMult:1.12, minimaxDepth:4, useSA:true, useHC:true, useAstar:true,
+    aiSpeedMult:1.12, minimaxDepth:4,
+    useSA:true, useHC:true, useAstar:true,
+    usePredictive:true, useIM:true, useCover:true, useNB:true,
+    btStates:['ENGAGE','CHASE','HEAL','COVER','AMBUSH'],
     hpBonus:150, fireRateBoost:0.25, coinReward:250,
     map:[
       // Tường chéo tạo mê cung ngục
@@ -5698,8 +5713,15 @@ function updateInfluenceMap(){
   if(now-imLastUpdate<80) return; // throttle 80ms
   imLastUpdate=now;
   influenceMap.fill(0);
+
+  // Xác định id của player (người chơi thực) để bot né đúng đạn
+  // Trong practice/campaign: myId=1 (player), bot=2
+  // Trong online: myId = id của mình, né đạn đối thủ
+  const playerId = isOnline ? (myId===1 ? 1 : 2) : 1;
+
   for(const b of bullets){
-    if(b.ownerId!==myId) continue; // chỉ đạn của player gây nguy hiểm cho bot
+    // Bot né đạn của player (không phải đạn của chính bot)
+    if(b.ownerId !== playerId) continue;
     const bspd=Math.hypot(b.vx,b.vy);
     if(bspd<0.1) continue;
     // Chiếu tia đạn về phía trước 8 bước
@@ -5709,13 +5731,10 @@ function updateInfluenceMap(){
       const gx=fx/IM_CELL|0;
       const gy=fy/IM_CELL|0;
       if(gx<0||gx>=IM_W||gy<0||gy>=IM_H) break;
-      // Tường chặn = dừng lan truyền
       if(obs.some(o=>rHit(fx-4,fy-4,8,8,o.x,o.y,o.w,o.h))) break;
-      // Điểm nguy hiểm giảm theo khoảng cách + lan rộng xung quanh
       const decay=Math.max(0,1-step*0.1);
       const idx=gy*IM_W+gx;
       influenceMap[idx]+=decay*120;
-      // Lan sang ô kề (bán kính 1)
       if(gx>0)    influenceMap[gy*IM_W+(gx-1)]+=decay*50;
       if(gx<IM_W-1) influenceMap[gy*IM_W+(gx+1)]+=decay*50;
       if(gy>0)    influenceMap[(gy-1)*IM_W+gx]+=decay*50;
@@ -5949,7 +5968,7 @@ function findCoverPosition(bot,tgt){
       // Tránh góc map
       if(c.x<50||c.x>W-TS-50||c.y<50||c.y>H-TS-50) score-=60;
 
-      if(score>bestScore){bestScore=score;bestPos=c;}
+      if(score>bestScore){bestScore=score;bestPos={...c, score:bestScore};}
     }
   }
   coverTarget=bestPos;
@@ -6114,11 +6133,12 @@ const AlphaBeta=(()=>{
   return{
     get cuts(){return _cuts;},
     get calls(){return _calls;},
-    decide(bot,tgt,preferDist){
+    decide(bot, tgt, preferDist, depth){
       _cuts=0;_calls=0;
+      const d = Math.max(1, depth||2);
       const state={bx:bot.x,by:bot.y,px:tgt.x,py:tgt.y,botHp:bot.hp,plrHp:tgt.hp,hasLOS:los(bot,tgt)};
-      const result=abSearch(state,2,-Infinity,Infinity,true,preferDist);
-      if(Math.random()<0.015) console.log(`[Alpha-Beta] Calls:${_calls} Cuts:${_cuts} (${Math.round(_cuts/_calls*100)||0}% pruned) | ${result.action?.name}`);
+      const result=abSearch(state, d,-Infinity,Infinity,true,preferDist);
+      if(Math.random()<0.015) console.log(`[Alpha-Beta] depth=${d} Calls:${_calls} Cuts:${_cuts} (${Math.round(_cuts/Math.max(1,_calls)*100)}% pruned) | ${result.action?.name}`);
       return result.action;
     },
   };
@@ -6187,8 +6207,15 @@ const BehaviorTree=(()=>{
       if(cfg.useIM) updateInfluenceMap(); // Chi update IM khi duoc phep
       const state=transition(bot,tgt,cfg,now);
       const lv=los(bot,tgt);
-      const nbCfg=NaiveBayes.config();
-      const abAction=AlphaBeta.decide(bot,tgt,nbCfg.preferDist);
+
+      // NaiveBayes config: chi dung khi bat, fallback aggressive
+      const nbCfg = cfg.useNB ? NaiveBayes.config() : {preferDist:200, fireThresh:0.9};
+
+      // AlphaBeta: chi goi khi minimaxDepth >= 1
+      // depth=1 = Minimax thuan tuy (khong cat canh), depth>1 = Alpha-Beta pruning
+      const abAction = cfg.minimaxDepth >= 1
+        ? AlphaBeta.decide(bot, tgt, nbCfg.preferDist, cfg.minimaxDepth)
+        : null;
 
       switch(state){
 
@@ -6226,8 +6253,8 @@ const BehaviorTree=(()=>{
           // A* đuổi theo player
           const d=cfg.useAstar?astar(bot.x,bot.y,tgt.x,tgt.y):null;
           const dir=d||{dx:Math.sign(tgt.x-bot.x),dy:Math.sign(tgt.y-bot.y)};
-          // SA né đạn trong khi đuổi
-          const saD=bullets.length>0?simulatedAnneal(bot):null;
+          // SA né đạn trong khi đuổi (chỉ khi useSA bật)
+          const saD=cfg.useSA&&bullets.length>0?simulatedAnneal(bot):null;
           const fd=saD||dir;
           bot.dirX=fd.dx;bot.dirY=fd.dy;
           move(bot,aiSpd);
@@ -6236,7 +6263,7 @@ const BehaviorTree=(()=>{
 
         case STATES.AMBUSH:{
           // Rush thẳng vào sniper + bắn liên tục
-          const saD=bullets.length>0?simulatedAnneal(bot):null;
+          const saD=cfg.useSA&&bullets.length>0?simulatedAnneal(bot):null;
           const rd=saD||{dx:Math.sign(tgt.x-bot.x),dy:Math.sign(tgt.y-bot.y)};
           bot.dirX=rd.dx;bot.dirY=rd.dy;
           move(bot,aiSpd*1.15); // tốc độ cao hơn khi rush
@@ -6286,11 +6313,14 @@ const BehaviorTree=(()=>{
           }
           move(bot,aiSpd);
 
-          // BUOC 2: QUYET DINH BAN (AlphaBeta chi quyet dinh co ban khong)
-          // AlphaBeta KHONG dieu khien huong di chuyen nua
-          const shouldFire = cfg.minimaxDepth>1
-            ? (abAction&&abAction.fire&&lv)  // Dung AB neu du sau
-            : (lv&&bot.cd<=0&&bot.mag>0&&!bot.reloading); // Easy: ban khi co LOS
+          // BUOC 2: QUYET DINH BAN
+          // depth=0 : ban khi co LOS (Easy - khong co Minimax)
+          // depth=1 : Minimax D1 - AB tra action nhung khong co pruning
+          // depth>=2: Alpha-Beta pruning - quyet dinh toi uu
+          const basicFire = lv && bot.cd<=0 && bot.mag>0 && !bot.reloading;
+          const shouldFire = cfg.minimaxDepth >= 1
+            ? (abAction && abAction.fire && basicFire)
+            : basicFire;
           if(shouldFire&&bot.cd<=0&&bot.mag>0&&!bot.reloading){
             NaiveBayes.noteShot();
             if(cfg.usePredictive) aiShootPredictive(bot,tgt);
@@ -6338,10 +6368,7 @@ function aiShootPredictive(shooter, target){
 
 // Giữ tên cũ để không break các chỗ gọi
 function aiShootAt(p,tx,ty){
-  // Redirect sang predictive nếu có target đầy đủ
-  const tgt=players.find(pl=>pl.id!==p.id);
-  if(tgt) { aiShootPredictive(p,tgt); return; }
-  // Fallback
+  // Bắn thẳng vào tọa độ cho trước — KHÔNG dùng predictive (caller tự quyết)
   if(p.mag<=0||p.reloading||p.cd>0)return;
   p.mag--;p.cd=p.gun.cd;
   const cx=p.x+TS/2,cy=p.y+TS/2;
@@ -6362,9 +6389,15 @@ let aiStrafeDir=1,aiStrafeTick=0;
 
 function runAI(bot,tgt){
   const now=Date.now();
-  const cfg=campAiConfig||{useSA:true,useHC:true,useAstar:true,aiSpeedMult:1,fireRateBoost:0};
+  // Fallback an toàn đủ tất cả field khi không có campAiConfig
+  const cfg=campAiConfig||{
+    useSA:true, useHC:true, useAstar:true, useIM:true,
+    usePredictive:true, useCover:true, useNB:true,
+    minimaxDepth:2, aiSpeedMult:1, fireRateBoost:0,
+    btStates:['ENGAGE','CHASE','HEAL','COVER','AMBUSH']
+  };
   const aiSpd=bot.speed*cfg.aiSpeedMult;
-  const aggr=cfg.fireRateBoost;
+  const aggr=cfg.fireRateBoost||0;
 
   // Quan sat player (chi khi cfg.useNB bat)
   if(cfg.useNB){ NaiveBayes.observe(tgt,bot,obs); updateNBHud(); }
@@ -7403,8 +7436,8 @@ const AIC = (() => {
 
   // ── Patch: AlphaBeta.decide → log action + stats ──
   const _abDecide = AlphaBeta.decide.bind(AlphaBeta);
-  AlphaBeta.decide = function(bot, tgt, preferDist) {
-    const action = _abDecide(bot, tgt, preferDist);
+  AlphaBeta.decide = function(bot, tgt, preferDist, depth) {
+    const action = _abDecide(bot, tgt, preferDist, depth);
     abCallsTotal += AlphaBeta.calls;
     abCutsTotal  += AlphaBeta.cuts;
     lastAbAction  = action ? action.name : null;
@@ -7474,10 +7507,10 @@ const AIC = (() => {
     });
   };
 
-  // ── Patch: findCoverPoint → sáng Cover card khi bot tìm điểm nấp ──
-  if (typeof findCoverPoint === 'function') {
-    const _cvOrig = findCoverPoint;
-    window.findCoverPoint = function(...args) {
+  // ── Patch: findCoverPosition → sáng Cover card khi bot tìm điểm nấp ──
+  if (typeof findCoverPosition === 'function') {
+    const _cvOrig = findCoverPosition;
+    window.findCoverPosition = function(...args) {
       const result = _cvOrig(...args);
       markActive('algocard-cv');
       throttled('cv', 700, () => {
