@@ -5175,7 +5175,7 @@ function update(){
   p.dirX=0;p.dirY=0;
   if(keys['KeyW'])p.dirY=-1; if(keys['KeyS'])p.dirY=1;
   if(keys['KeyA'])p.dirX=-1; if(keys['KeyD'])p.dirX=1;
-  move(p,p.speed*0.35);
+  move(p,p.speed);
   if(p.cd>0)p.cd--;
   // Cập nhật góc ngắm theo chuột
   p.aimAngle = Math.atan2(mY-(p.y+TS/2), mX-(p.x+TS/2));
@@ -5961,7 +5961,7 @@ function aiShootPredictive(shooter, target){
   const ang=Math.atan2(inY-cy,inX-cx);
 
   const isCannon=shooter.gun.id==='cannon';
-  const spd=(isCannon?9:shooter.gun.bspd)*(shooter.bMult||1);
+  const spd=(isCannon?9:shooter.gun.bspd)*(shooter.bMult||1)*0.6; // giam toc do dan bot 60%
   const dmg=isCannon?15:shooter.gun.damage;
   const sz=isCannon?7:shooter.gun.id==='rifle'||shooter.gun.id==='pistol'?4:3;
 
