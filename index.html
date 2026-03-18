@@ -5884,35 +5884,57 @@ const BehaviorTree=(()=>{
 
         default: // ENGAGE
         case STATES.ENGAGE:{
-          // SA né đạn trước
+          // BUOC 1: QUYET DINH HUONG DI CHUYEN (tach khoi AlphaBeta)
+          let movedSA=false;
           if(cfg.useSA&&bullets.length>0){
             const saD=simulatedAnneal(bot);
-            if(saD){bot.dirX=saD.dx;bot.dirY=saD.dy;move(bot,aiSpd);break;}
+            if(saD){bot.dirX=saD.dx;bot.dirY=saD.dy;movedSA=true;}
           }
-          // Alpha-Beta chọn action
-          if(abAction){
-            bot.dirX=abAction.ddx;bot.dirY=abAction.ddy;
-          } else if(lv&&cfg.useHC){
-            // HC nếu AB không quyết được
-            const hc=hillClimb(bot,tgt,aggr);
-            bot.dirX=hc.dx;bot.dirY=hc.dy;
-          } else {
-            bot.dirX=Math.sign(tgt.x-bot.x);
-            bot.dirY=Math.sign(tgt.y-bot.y);
+          if(!movedSA){
+            if(cfg.useHC){
+              const hc=hillClimb(bot,tgt,aggr);
+              if(hc.dx||hc.dy){
+                bot.dirX=hc.dx;bot.dirY=hc.dy;
+              } else {
+                // HC tra {0,0} = da o vi tri tot -> van can di khi xa
+                const dd=Math.hypot(bot.x-tgt.x,bot.y-tgt.y);
+                if(dd>80){bot.dirX=Math.sign(tgt.x-bot.x);bot.dirY=Math.sign(tgt.y-bot.y);}
+              }
+            } else {
+              // Khong co HC: di/lui de giu khoang cach + strafing
+              const dd=Math.hypot(bot.x-tgt.x,bot.y-tgt.y);
+              const ideal=cfg.usePredictive?180:220;
+              if(dd>ideal+40){
+                bot.dirX=Math.sign(tgt.x-bot.x);bot.dirY=Math.sign(tgt.y-bot.y);
+              } else if(dd<ideal-40){
+                bot.dirX=-Math.sign(tgt.x-bot.x);bot.dirY=-Math.sign(tgt.y-bot.y);
+              } else {
+                // Trong khoang ly tuong: strafing ngang
+                const ang=Math.atan2(bot.y-tgt.y,bot.x-tgt.x);
+                bot.dirX=Math.round(Math.cos(ang+Math.PI/2*aiStrafeDir));
+                bot.dirY=Math.round(Math.sin(ang+Math.PI/2*aiStrafeDir));
+              }
+            }
           }
-          // Thoát góc
+          // Thoat goc map
           if((bot.x<50||bot.x>W-TS-50)&&(bot.y<50||bot.y>H-TS-50)){
             bot.dirX=Math.sign(W/2-bot.x);bot.dirY=Math.sign(H/2-bot.y);
           }
           move(bot,aiSpd);
-          if(abAction?.fire&&lv&&bot.cd<=0&&bot.mag>0&&!bot.reloading){
+
+          // BUOC 2: QUYET DINH BAN (AlphaBeta chi quyet dinh co ban khong)
+          // AlphaBeta KHONG dieu khien huong di chuyen nua
+          const shouldFire = cfg.minimaxDepth>1
+            ? (abAction&&abAction.fire&&lv)  // Dung AB neu du sau
+            : (lv&&bot.cd<=0&&bot.mag>0&&!bot.reloading); // Easy: ban khi co LOS
+          if(shouldFire&&bot.cd<=0&&bot.mag>0&&!bot.reloading){
             NaiveBayes.noteShot();
-            // Chi dung Predictive neu cfg.usePredictive, nguoc lai ban thang
             if(cfg.usePredictive) aiShootPredictive(bot,tgt);
             else aiShootAt(bot,tgt.x,tgt.y);
           }
           break;
         }
+      
       }
     },
   };
@@ -5983,6 +6005,9 @@ function runAI(bot,tgt){
   // Quan sat player (chi khi cfg.useNB bat)
   if(cfg.useNB){ NaiveBayes.observe(tgt,bot,obs); updateNBHud(); }
   else { const el=document.getElementById('nb-hud'); if(el) el.style.display='none'; }
+
+  // Cap nhat strafing direction (doi chieu moi 600ms)
+  if(now-aiStrafeTick>600){aiStrafeTick=now;aiStrafeDir*=-1;}
 
   // Tick Behavior Tree (xử lý toàn bộ quyết định)
   BehaviorTree.tick(bot,tgt,cfg,now,aiSpd,aggr);
