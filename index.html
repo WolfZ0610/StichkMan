@@ -2216,59 +2216,73 @@ canvas{display:block;cursor:crosshair}
     </div>
     <div class="diff-grid">
 
-      <!-- DỄ -->
+            <!-- DE -->
       <div class="diff-card easy" onclick="goPractice('easy')">
         <div class="diff-icon">🌱</div>
         <div class="diff-name">DỄ</div>
-        <div class="diff-desc">AI chậm, không né đạn, không phản xạ tốt. Phù hợp người mới làm quen.</div>
+        <div class="diff-desc">Dành cho ngỰời mới. Bot chỉ đi thẳng, không né đạn, bắn cảm tính. Học cơ bản di chuyển và bắn súng.</div>
         <div class="diff-tags">
-          <span class="diff-tag">Tốc 55%</span>
-          <span class="diff-tag">Không SA</span>
-          <span class="diff-tag">Không A*</span>
+          <span class="diff-tag">Minimax D1</span>
+          <span class="diff-tag">Tốc 45%</span>
+          <span class="diff-tag">Bắn thẳng</span>
+          <span class="diff-tag">1 trạng thái BT</span>
+        </div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.56rem;color:var(--txt-dim);margin-bottom:12px;line-height:2">
+          🟢 Minimax ― 🔴 A* ― 🔴 SA ― 🔴 Predict ― 🔴 Cover
         </div>
         <button class="diff-btn">▶ BẮT ĐẦU · 10 🪙</button>
       </div>
 
-      <!-- TRUNG BÌNH -->
+      <!-- TRUNG BINH -->
       <div class="diff-card medium" onclick="goPractice('medium')">
         <div class="diff-icon">⚔️</div>
         <div class="diff-name">TRUNG BÌNH</div>
-        <div class="diff-desc">AI dùng Hill Climbing, tìm góc có lợi và phản ứng tốt hơn.</div>
+        <div class="diff-desc">Dành cho ngỰời đã biết chơi. Bot tìm vị trí có lợi, tìm đỰờng tránh tỰờng, đôi khi bắn dự đoán. Học positioning và quản lý đạn.</div>
         <div class="diff-tags">
-          <span class="diff-tag">Tốc 78%</span>
-          <span class="diff-tag">Hill Climbing</span>
-          <span class="diff-tag">HP +30</span>
+          <span class="diff-tag">HC + A* + Minimax D2</span>
+          <span class="diff-tag">Tốc 70%</span>
+          <span class="diff-tag">Predict nhẹ</span>
+          <span class="diff-tag">HP +25</span>
         </div>
-        <button class="diff-btn">▶ BẮT ĐẦU · 15 🪙</button>
-      </div>
-
-      <!-- KHÓ -->
-      <div class="diff-card hard" onclick="goPractice('hard')">
-        <div class="diff-icon">🔥</div>
-        <div class="diff-name">KHÓ</div>
-        <div class="diff-desc">AI né đạn phản xạ (SA), tìm đường A*, tấn công liên tục.</div>
-        <div class="diff-tags">
-          <span class="diff-tag">Tốc 95%</span>
-          <span class="diff-tag">SA + HC + A*</span>
-          <span class="diff-tag">HP +80</span>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.56rem;color:var(--txt-dim);margin-bottom:12px;line-height:2">
+          🟢 Minimax ― 🟢 A* ― 🟢 HC ― 🟢 Predict ― 🔴 SA ― 🔴 Cover
         </div>
         <button class="diff-btn">▶ BẮT ĐẦU · 20 🪙</button>
       </div>
 
-      <!-- SIÊU KHÓ -->
+      <!-- KHO -->
+      <div class="diff-card hard" onclick="goPractice('hard')">
+        <div class="diff-icon">🔥</div>
+        <div class="diff-name">KHÓ</div>
+        <div class="diff-desc">Dành cho ngỰời thành thạo. Bot né đạn theo hỹuấng bay thực tế, bắn chính xác, đọc phong cách của bạn. Cần kỹ năng dodge và micro cao.</div>
+        <div class="diff-tags">
+          <span class="diff-tag">SA + HC + A* + Predict</span>
+          <span class="diff-tag">Influence Map</span>
+          <span class="diff-tag">Naive Bayes</span>
+          <span class="diff-tag">HP +70</span>
+        </div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.56rem;color:var(--txt-dim);margin-bottom:12px;line-height:2">
+          🟢 SA ― 🟢 HC ― 🟢 A* ― 🟢 Predict ― 🟢 IM ― 🟢 NaiveBayes ― 🔴 Cover
+        </div>
+        <button class="diff-btn">▶ BẮT ĐẦU · 35 🪙</button>
+      </div>
+
+      <!-- SIEU KHO -->
       <div class="diff-card extreme" onclick="goPractice('extreme')">
         <div class="diff-icon">💀</div>
         <div class="diff-name">SIÊU KHÓ</div>
-        <div class="diff-desc">AI toàn năng, tốc độ vượt người chơi, phản xạ tức thì. Thử thách thực sự.</div>
+        <div class="diff-desc">Dành cho tryhard. Full 10 thuật toán: bot nup cover, adapt theo phong cách, Behavior Tree đầy đủ. Không có chiến thuật nào thắng tuyệt đối.</div>
         <div class="diff-tags">
-          <span class="diff-tag">Tốc 115%</span>
-          <span class="diff-tag">Full AI Max</span>
-          <span class="diff-tag">HP +150</span>
+          <span class="diff-tag">Full 10 thuật toán</span>
+          <span class="diff-tag">Cover System</span>
+          <span class="diff-tag">BT đầy đủ</span>
+          <span class="diff-tag">HP +140</span>
         </div>
-        <button class="diff-btn">▶ BẮT ĐẦU · 30 🪙</button>
-      </div>
-
-    </div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.56rem;color:var(--txt-dim);margin-bottom:12px;line-height:2">
+          🟢 SA ― 🟢 HC ― 🟢 A* ― 🟢 Predict ― 🟢 IM ― 🟢 Cover ― 🟢 NaiveBayes ― 🟢 Alpha\u03b2 ― 🟢 BT
+        </div>
+        <button class="diff-btn">▶ BẮT ĐẦU · 50 🪙</button>
+      </div>    </div>
   </div>
 </div>
 
@@ -3922,51 +3936,127 @@ function showOnlinePanel(panel) {
 // PRACTICE / LUYỆN TẬP
 // ══════════════════════════════════════════════════════════════
 const PRACTICE_CONFIGS = {
+
+  // ================================================================
+  // DE: Nguoi moi lam quen game
+  // Thuat toan: Minimax D1 (quyet dinh co ban, ngau nhien)
+  // Bot chi di thang ve phia player, khong ne dan, khong tim duong
+  // Muc tieu: tap di chuyen, bat, lam quen ban do
+  // ================================================================
   easy: {
     name:'DỄ', coinReward:10,
-    aiSpeedMult:0.55, useSA:false, useHC:false, useAstar:false,
-    hpBonus:0, fireRateBoost:0,
+    aiSpeedMult:0.45,          // Cham hon 55% cu - player co nhieu thoi gian phan ung
+    useSA:false,               // Khong ne dan - dan de trung
+    useHC:false,               // Khong chon vi tri - bot dung ngau nhien
+    useAstar:false,            // Khong tim duong - di thang, de bi tuong chan
+    usePredictive:false,       // Ban thang vao vi tri hien tai - de tranh
+    useIM:false,               // Khong dung Influence Map
+    useCover:false,            // Bot khong biet nup
+    useNB:false,               // Khong doc phong cach player
+    btStates:['ENGAGE'],       // Chi co 1 trang thai: tan cong thang
+    minimaxDepth:1,            // Minimax 1 ply - quyet dinh don gian nhat
+    hpBonus:0,                 // HP bang player - can bang
+    fireRateBoost:0,           // Toc ban binh thuong
     aiChar:'warrior', aiGun:'smg',
+    // Ban do thong: nhieu vat can, nhieu cho nup cho player hoc co ban
     map: [
-      {x:220,y:180,w:75,h:75},{x:800,y:180,w:75,h:75},
-      {x:220,y:400,w:75,h:75},{x:800,y:400,w:75,h:75},
-      {x:490,y:290,w:120,h:70},
+      {x:200,y:160,w:80,h:80},{x:820,y:160,w:80,h:80},
+      {x:200,y:410,w:80,h:80},{x:820,y:410,w:80,h:80},
+      {x:490,y:195,w:120,h:60},{x:490,y:375,w:120,h:60},
+      {x:350,y:280,w:60,h:60},{x:640,y:280,w:60,h:60},
     ]
   },
+
+  // ================================================================
+  // TRUNG BINH: Nguoi da biet choi - hoc tactical
+  // Thuat toan: Hill Climbing + A* + Minimax D2
+  // Bot tim vi tri co loi, di duong tranh tuong, quyet dinh sau hon
+  // Muc tieu: hoc doc ban do, dung cover, quan ly dan
+  // ================================================================
   medium: {
-    name:'TRUNG BÌNH', coinReward:15,
-    aiSpeedMult:0.78, useSA:false, useHC:true, useAstar:false,
-    hpBonus:30, fireRateBoost:0.08,
+    name:'TRUNG BÌNH', coinReward:20,
+    aiSpeedMult:0.70,
+    useSA:false,               // Chua ne dan - con co the doan
+    useHC:true,                // Hill Climbing - chon goc co loi
+    useAstar:true,             // A* that - tim duong thong minh qua tuong
+    usePredictive:true,        // Ban du doan (60%) - can di chuyen khon hon
+    useIM:false,               // Chua dung IM - dan van co the bi nghi ngo
+    useCover:false,            // Chua nup - nhung chon vi tri tot hon
+    useNB:false,               // Chua doc style
+    btStates:['ENGAGE','CHASE','HEAL'],  // Bien thai: tan cong, duoi, lay mau
+    minimaxDepth:2,
+    hpBonus:25,
+    fireRateBoost:0.08,
     aiChar:'assassin', aiGun:'rifle',
+    // Ban do co hang lang - buoc player hoc vi tri
     map: [
-      {x:140,y:100,w:200,h:50},{x:760,y:100,w:200,h:50},
-      {x:140,y:500,w:200,h:50},{x:760,y:500,w:200,h:50},
-      {x:480,y:220,w:140,h:50},{x:480,y:380,w:140,h:50},
-      {x:350,y:270,w:55,h:110},{x:695,y:270,w:55,h:110},
+      {x:130,y:90,w:200,h:55},{x:770,y:90,w:200,h:55},
+      {x:130,y:505,w:200,h:55},{x:770,y:505,w:200,h:55},
+      {x:475,y:210,w:150,h:55},{x:475,y:385,w:150,h:55},
+      {x:340,y:265,w:60,h:120},{x:700,y:265,w:60,h:120},
+      {x:490,y:295,w:120,h:60},
     ]
   },
+
+  // ================================================================
+  // KHO: Nguoi thanh thao - ky nang micro cao
+  // Thuat toan: SA + HC + A* + Predictive + Influence Map + NaiveBayes
+  // Bot ne dan thong minh theo huong that, ban chinh xac, doc style
+  // Muc tieu: hoc micro, cover, dodge nang cao
+  // ================================================================
   hard: {
-    name:'KHÓ', coinReward:20,
-    aiSpeedMult:0.95, useSA:true, useHC:true, useAstar:true,
-    hpBonus:80, fireRateBoost:0.18,
+    name:'KHÓ', coinReward:35,
+    aiSpeedMult:0.90,
+    useSA:true,                // SA ne dan theo Influence Map
+    useHC:true,
+    useAstar:true,
+    usePredictive:true,        // Ban du doan day du
+    useIM:true,                // Influence Map - ne dung huong dan bay
+    useCover:false,            // Chua nup cover (se ra o extreme)
+    useNB:true,                // Doc phong cach player va thay doi chien thuat
+    btStates:['ENGAGE','CHASE','HEAL','AMBUSH'], // Them AMBUSH vs sniper
+    minimaxDepth:3,
+    hpBonus:70,
+    fireRateBoost:0.18,
     aiChar:'sniper', aiGun:'pistol',
+    // Ban do phi doi xung - buoc player adapt
     map: [
-      {x:0,y:210,w:220,h:45},{x:880,y:395,w:220,h:45},
-      {x:0,y:395,w:110,h:45},{x:990,y:210,w:110,h:45},
-      {x:460,y:130,w:45,h:200},{x:595,y:320,w:45,h:200},
-      {x:290,y:270,w:80,h:80},{x:730,y:270,w:80,h:80},
+      {x:0,y:200,w:230,h:50},{x:880,y:380,w:230,h:50},
+      {x:0,y:380,w:120,h:50},{x:980,y:200,w:120,h:50},
+      {x:450,y:120,w:50,h:210},{x:600,y:320,w:50,h:210},
+      {x:280,y:265,w:90,h:90},{x:730,y:265,w:90,h:90},
+      {x:450,y:290,w:200,h:70},
     ]
   },
+
+  // ================================================================
+  // SIEU KHO: Tryhard - full 10 thuat toan
+  // TU: SA + HC + A*(heuristic) + Predictive + IM + Cover + BT + NB + AlphaBeta + Minimax
+  // Bot adapt theo phong cach, nup cover khi can, rush sniper, ne dan chinh xac
+  // Muc tieu: test ky nang thuc su, khong co chien thuat nao manh tuyet doi
+  // ================================================================
   extreme: {
-    name:'SIÊU KHÓ', coinReward:30,
-    aiSpeedMult:1.15, useSA:true, useHC:true, useAstar:true,
-    hpBonus:150, fireRateBoost:0.28,
+    name:'SIÊU KHÓ', coinReward:50,
+    aiSpeedMult:1.12,
+    useSA:true,
+    useHC:true,
+    useAstar:true,
+    usePredictive:true,
+    useIM:true,                // Influence Map - bo ne dan toan dien
+    useCover:true,             // Cover System - nup sau tuong khi can
+    useNB:true,                // Naive Bayes - doc style va adapt
+    btStates:['ENGAGE','CHASE','HEAL','COVER','AMBUSH'], // Toan bo trang thai
+    minimaxDepth:4,
+    hpBonus:140,
+    fireRateBoost:0.28,
     aiChar:'tank', aiGun:'cannon',
+    // Ban do phu tap - nhieu goc, nhieu cover, tao thach thuc toi da
     map: [
-      {x:200,y:100,w:40,h:200},{x:860,y:100,w:40,h:200},
-      {x:200,y:350,w:40,h:200},{x:860,y:350,w:40,h:200},
-      {x:240,y:220,w:220,h:40},{x:640,y:390,w:220,h:40},
-      {x:445,y:255,w:210,h:140},
+      {x:185,y:90,w:45,h:210},{x:870,y:90,w:45,h:210},
+      {x:185,y:350,w:45,h:210},{x:870,y:350,w:45,h:210},
+      {x:230,y:210,w:230,h:45},{x:640,y:395,w:230,h:45},
+      {x:430,y:245,w:240,h:160},
+      {x:340,y:130,w:55,h:55},{x:705,y:465,w:55,h:55},
     ]
   }
 };
@@ -5695,22 +5785,28 @@ const BehaviorTree=(()=>{
     const hpR=bot.hp/(bot.maxHp||100);
     const dist=Math.hypot(bot.x-tgt.x,bot.y-tgt.y);
     const lv=los(bot,tgt);
-    const danger=imDangerAt(bot.x,bot.y);
-    const style=NaiveBayes.style;
+    // [FIX] Chi dung IM neu cfg.useIM bat
+    const danger=cfg.useIM?imDangerAt(bot.x,bot.y):0;
+    // [FIX] Chi dung NaiveBayes neu cfg.useNB bat
+    const style=cfg.useNB?NaiveBayes.style:'aggressive';
+    // [FIX] Danh sach trang thai duoc phep theo do kho
+    const allowed=cfg.btStates||['ENGAGE'];
+    const can=(s)=>allowed.includes(s);
 
     let next=currentState;
 
-    // Priority 1: Chạy lấy HP nếu gần chết
-    if(hpR<0.25&&nearItem(bot,'HP')) next=STATES.HEAL;
-    // Priority 2: Tìm cover khi reload / nguy hiểm / HP thấp
-    else if(bot.reloading||(hpR<0.40&&!lv)||(danger>150)) next=STATES.COVER;
-    // Priority 3: Đuổi nếu không thấy
-    else if(!lv&&dist>120) next=STATES.CHASE;
-    // Priority 4: Rush sniper
-    else if(style==='sniper'&&dist>200) next=STATES.AMBUSH;
-    // Default: tấn công
+    // Priority 1: Lay HP (chi khi co HEAL trong btStates)
+    if(can('HEAL')&&hpR<0.25&&nearItem(bot,'HP')) next=STATES.HEAL;
+    // Priority 2: Nup cover (chi khi useCover=true VA co COVER)
+    else if(can('COVER')&&cfg.useCover&&(bot.reloading||(hpR<0.40&&!lv)||(danger>150))) next=STATES.COVER;
+    // Priority 3: Duoi player (chi khi co CHASE)
+    else if(can('CHASE')&&!lv&&dist>120) next=STATES.CHASE;
+    // Priority 4: Rush sniper (chi khi useNB=true VA co AMBUSH)
+    else if(can('AMBUSH')&&cfg.useNB&&style==='sniper'&&dist>200) next=STATES.AMBUSH;
+    // Default: tan cong
     else next=STATES.ENGAGE;
 
+    
     if(next!==currentState){
       console.log(`[BT] ${currentState} → ${next} (hp:${Math.round(hpR*100)}% d:${Math.round(dist)} lv:${lv})`);
       currentState=next;
@@ -5724,7 +5820,7 @@ const BehaviorTree=(()=>{
     reset(){currentState=STATES.ENGAGE;stateTimer=0;},
 
     tick(bot,tgt,cfg,now,aiSpd,aggr){
-      updateInfluenceMap(); // Cập nhật bản đồ nguy hiểm
+      if(cfg.useIM) updateInfluenceMap(); // Chi update IM khi duoc phep
       const state=transition(bot,tgt,cfg,now);
       const lv=los(bot,tgt);
       const nbCfg=NaiveBayes.config();
@@ -5741,7 +5837,9 @@ const BehaviorTree=(()=>{
           bot.dirX=dir.dx;bot.dirY=dir.dy;
           move(bot,aiSpd*1.1); // sprint đến HP
           // Bắn nếu có thể trong khi chạy
-          if(lv&&bot.cd<=0&&bot.mag>0&&!bot.reloading) aiShootPredictive(bot,tgt);
+          if(lv&&bot.cd<=0&&bot.mag>0&&!bot.reloading){
+            if(cfg.usePredictive) aiShootPredictive(bot,tgt); else aiShootAt(bot,tgt.x,tgt.y);
+          }
           break;
         }
 
@@ -5754,7 +5852,9 @@ const BehaviorTree=(()=>{
           bot.dirX=dir.dx;bot.dirY=dir.dy;
           move(bot,aiSpd);
           // Bắn liếc góc nếu đang reload xong
-          if(lv&&!bot.reloading&&bot.cd<=0&&bot.mag>0) aiShootPredictive(bot,tgt);
+          if(lv&&!bot.reloading&&bot.cd<=0&&bot.mag>0){
+            if(cfg.usePredictive) aiShootPredictive(bot,tgt); else aiShootAt(bot,tgt.x,tgt.y);
+          }
           break;
         }
 
@@ -5776,7 +5876,9 @@ const BehaviorTree=(()=>{
           const rd=saD||{dx:Math.sign(tgt.x-bot.x),dy:Math.sign(tgt.y-bot.y)};
           bot.dirX=rd.dx;bot.dirY=rd.dy;
           move(bot,aiSpd*1.15); // tốc độ cao hơn khi rush
-          if(lv&&bot.cd<=0&&bot.mag>0&&!bot.reloading) aiShootPredictive(bot,tgt);
+          if(lv&&bot.cd<=0&&bot.mag>0&&!bot.reloading){
+            if(cfg.usePredictive) aiShootPredictive(bot,tgt); else aiShootAt(bot,tgt.x,tgt.y);
+          }
           break;
         }
 
@@ -5805,7 +5907,9 @@ const BehaviorTree=(()=>{
           move(bot,aiSpd);
           if(abAction?.fire&&lv&&bot.cd<=0&&bot.mag>0&&!bot.reloading){
             NaiveBayes.noteShot();
-            aiShootPredictive(bot,tgt); // [FIX #1] Dùng Predictive Aiming
+            // Chi dung Predictive neu cfg.usePredictive, nguoc lai ban thang
+            if(cfg.usePredictive) aiShootPredictive(bot,tgt);
+            else aiShootAt(bot,tgt.x,tgt.y);
           }
           break;
         }
@@ -5876,9 +5980,9 @@ function runAI(bot,tgt){
   const aiSpd=bot.speed*cfg.aiSpeedMult;
   const aggr=cfg.fireRateBoost;
 
-  // Quan sát player cho Naive Bayes
-  NaiveBayes.observe(tgt,bot,obs);
-  updateNBHud();
+  // Quan sat player (chi khi cfg.useNB bat)
+  if(cfg.useNB){ NaiveBayes.observe(tgt,bot,obs); updateNBHud(); }
+  else { const el=document.getElementById('nb-hud'); if(el) el.style.display='none'; }
 
   // Tick Behavior Tree (xử lý toàn bộ quyết định)
   BehaviorTree.tick(bot,tgt,cfg,now,aiSpd,aggr);
