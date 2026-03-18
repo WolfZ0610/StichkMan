@@ -4633,12 +4633,21 @@ function csBack(){
 function csStart(){
   document.getElementById('char-screen').classList.add('hidden');
   if(csMode==='campaign' && pendingStage){
+    // Chế độ chiến dịch: stage đã chọn
     const st=pendingStage;
     isCampaign=true; campStageId=st.id; campAiConfig=st;
     isOnline=false; myId=1;
     aiCh=st.aiChar; aiGn=st.aiGun;
     startGame();
+  } else if(csMode==='vsai' && pendingStage){
+    // Chế độ luyện tập: pendingStage có đầy đủ config
+    const st=pendingStage;
+    isCampaign=false; campStageId=0; campAiConfig=st;
+    isOnline=false; myId=1;
+    aiCh=st.aiChar; aiGn=st.aiGun;
+    startGame();
   } else {
+    // VS AI tự do: random character + gun
     isCampaign=false; campStageId=0; campAiConfig=null;
     isOnline=false; myId=1;
     aiCh=CHARS[Math.floor(Math.random()*CHARS.length)].id;
@@ -4662,6 +4671,7 @@ function goNextStage(stageId){
   const st=STAGES.find(s=>s.id===stageId);
   if(!st)return;
   selectedStageId=stageId;
+  pendingStage=null; // Reset trước khi mở stage mới
   players=[];bullets=[];effects=[];dmgNumbers=[];items=[];
   document.getElementById('game-wrapper').style.display='none';
   _openCharSelectForCampaign(st);
@@ -4684,7 +4694,7 @@ function pauseGame(){
   if(isCampaign && campAiConfig){
     const st=campAiConfig;
     document.getElementById('pause-stage-info').classList.add('show');
-    document.getElementById('psi-icon').innerText=st.avatar||'⚔';
+    document.getElementById('psi-icon').innerText = st.avatar || (isCampaign ? '⚔️' : '🎯');
     document.getElementById('psi-ep').innerText=`${st.ep}  ·  ẢI ${st.id}/5`;
     document.getElementById('psi-name').innerText=st.name;
     document.getElementById('psi-name').style.color=st.col;
@@ -4709,7 +4719,7 @@ function resumeGame(){
   paused=false;
   document.getElementById('pause-overlay').classList.remove('show');
   document.getElementById('pause-hud-btn').innerHTML='⏸ PAUSE <span style="opacity:.5;font-size:.5rem">[ESC]</span>';
-  gameLoop();
+  startLoop(); // dùng startLoop để tránh double-call
 }
 
 // Chơi lại ải từ đầu → về char select cùng ải đó
@@ -4737,7 +4747,7 @@ function quitToMenu(){
 
 // Dọn state game khi thoát/restart
 function _pauseCleanup(){
-  paused=false; running=false;
+  paused=false; running=false; _loopRunning=false;
   if(_itemSpawnInterval){clearInterval(_itemSpawnInterval);_itemSpawnInterval=null;}
   document.getElementById('pause-overlay').classList.remove('show');
   document.getElementById('pause-hud-btn').innerHTML='⏸ PAUSE <span style="opacity:.5;font-size:.5rem">[ESC]</span>';
@@ -5173,23 +5183,39 @@ function startGame(init=null){
   const aib=document.getElementById('ai-badge');
   if(isCampaign&&campAiConfig){
     shb.style.display='block';
-    shb.innerHTML=`⚔ ẢI ${campAiConfig.id}/5<br>${campAiConfig.name}<br><span style="color:${campAiConfig.col}">${campAiConfig.ep}</span>`;
+    const stCol = campAiConfig.col || '#00d4ff';
+    const stEp  = campAiConfig.ep  || '';
+    const stId  = campAiConfig.id  || '';
+    shb.innerHTML=`⚔ ẢI ${stId}/5<br>${campAiConfig.name}<br><span style="color:${stCol}">${stEp}</span>`;
     aib.style.display='none';
-    // Apply AI HP bonus
-    const bot=opp();
-    if(bot&&campAiConfig.hpBonus>0){
-      bot.hp+=campAiConfig.hpBonus;
-      bot.maxHp+=campAiConfig.hpBonus;
-    }
+  } else if(campAiConfig && !isCampaign){
+    // Practice mode
+    shb.style.display='block';
+    shb.innerHTML=`🎯 LUYỆN TẬP — ${campAiConfig.name}`;
+    aib.style.display='none';
   } else {
     shb.style.display='none';
     aib.style.display=isOnline?'none':'block';
   }
+  // Apply AI HP bonus (campaign + practice)
+  if(campAiConfig && campAiConfig.hpBonus > 0 && !isOnline){
+    const bot = opp();
+    if(bot){
+      bot.hp    = bot.hp    + campAiConfig.hpBonus;
+      bot.maxHp = bot.maxHp + campAiConfig.hpBonus;
+    }
+  }
   bullets=[];effects=[];dmgNumbers=[];running=true;paused=false;
-  NaiveBayes.reset(); // Reset Naive Bayes khi bắt đầu trận mới
-  BehaviorTree.reset(); walkGrid=null; coverTarget=null; influenceMap.fill(0); imLastUpdate=0;
+  // Reset AI state TRƯỚC KHI khởi động game
+  saTemp=50; // Reset SA temperature về trạng thái ban đầu
+  NaiveBayes.reset();
+  BehaviorTree.reset();
+  walkGrid=null; coverTarget=null; influenceMap.fill(0); imLastUpdate=0;
+  // Với offline: buildWalkGrid sau khi obs đã sẵn sàng
+  if(!init && walkGrid===null) buildWalkGrid();
   const nbEl=document.getElementById('nb-hud'); if(nbEl) nbEl.style.display='none';
-  gameLoop();
+  _loopRunning=false;
+  startLoop();
   if(_itemSpawnInterval){clearInterval(_itemSpawnInterval);_itemSpawnInterval=null;}
   if(!isOnline) _itemSpawnInterval=setInterval(()=>{if(running)spawnItem(Math.random()>.5?'HP':'AMMO');},7000);
 
@@ -5235,7 +5261,8 @@ function startGame(init=null){
 // RANDOM MAP GENERATOR
 // ══════════════════════════════════════════
 function buildMap(){
-  if(isCampaign && campAiConfig && campAiConfig.map){
+  // Dùng map cố định cho cả campaign VÀ practice (campAiConfig luôn có .map)
+  if(campAiConfig && campAiConfig.map){
     obs = campAiConfig.map.map(o=>({...o}));
     return;
   }
@@ -5362,8 +5389,14 @@ function buildMapRandom(){
 // ══════════════════════════════════════════
 function spawnItem(type){
   let tries=0,x,y;
-  do{x=55+Math.random()*(W-110);y=55+Math.random()*(H-110);tries++;}
-  while(tries<30&&obs.some(o=>rHit(x,y,26,26,o.x,o.y,o.w,o.h)));
+  do{
+    x=55+Math.random()*(W-110);
+    y=55+Math.random()*(H-110);
+    tries++;
+  } while(tries<40 && (
+    obs.some(o=>rHit(x,y,26,26,o.x,o.y,o.w,o.h)) ||
+    items.some(it=>Math.hypot(it.x-x,it.y-y)<36)  // Không chồng item
+  ));
   items.push({type,x,y,size:26,id:Date.now()+Math.random()});
 }
 
@@ -5417,9 +5450,11 @@ function doReload(p){
   if(p.reloading||p.mag===p.gun.magSize||p.ammo===0)return;
   p.reloading=true;p.rlTimer=p.gun.reloadMs;
 }
+let _lastFrameMs = 0;
 function tickRl(p){
   if(!p.reloading)return;
-  p.rlTimer-=16;
+  const dt = _lastFrameMs > 0 ? Math.min(_lastFrameMs, 50) : 16; // clamp tối đa 50ms
+  p.rlTimer -= dt;
   if(p.rlTimer<=0){
     const need=p.gun.magSize-p.mag,load=Math.min(need,p.ammo);
     p.mag+=load;p.ammo-=load;p.reloading=false;p.rlTimer=0;
@@ -5459,11 +5494,11 @@ function shoot(p,tx,ty,pw){
   if(p.gun.id==='cannon'){
     const charged=pw>0.15;
     dmg   = charged ? 30 : 10;
-    spd   = (charged ? 14 : 7) * p.bMult;
+    spd   = (charged ? 14 : 7) * (p.bMult||1);
     sz    = charged ? 10 : 7;
   } else {
     dmg  = p.gun.damage;
-    spd  = p.gun.bspd * p.bMult;
+    spd  = p.gun.bspd * (p.bMult||1);
     sz   = p.gun.id==='rifle'||p.gun.id==='pistol' ? 4 : 3;
   }
 
@@ -5484,7 +5519,7 @@ function aiShootAt(p,tx,ty){
   const inX=tx+TS/2+(Math.random()-.5)*55,inY=ty+TS/2+(Math.random()-.5)*55;
   const ang=Math.atan2(inY-cy,inX-cx);
   const isCannon=p.gun.id==='cannon';
-  const spd=(isCannon?9:p.gun.bspd)*p.bMult;
+  const spd=(isCannon?9:p.gun.bspd)*(p.bMult||1);
   const dmg=isCannon?15:p.gun.damage;
   const sz=isCannon?7:p.gun.id==='rifle'||p.gun.id==='pistol'?4:3;
   bullets.push({x:cx,y:cy,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,
@@ -5494,7 +5529,25 @@ function aiShootAt(p,tx,ty){
 // ══════════════════════════════════════════
 // MAIN LOOP
 // ══════════════════════════════════════════
-function gameLoop(){if(!running||paused)return;update();draw();requestAnimationFrame(gameLoop);}
+function gameLoop(){
+  if(!running||paused)return;
+  update();draw();
+  requestAnimationFrame(gameLoop);
+}
+let _loopRunning=false;
+function startLoop(){
+  if(_loopRunning)return; // chặn double-start
+  _loopRunning=true;
+  let _prevTs=0;
+  function _tick(ts){
+    if(!running||paused){_loopRunning=false;return;}
+    _lastFrameMs = _prevTs>0 ? ts-_prevTs : 16;
+    _prevTs=ts;
+    update();draw();
+    requestAnimationFrame(_tick);
+  }
+  requestAnimationFrame(_tick);
+}
 function me() {return players.find(p=>p.id===myId);}
 function opp(){return players.find(p=>p.id!==myId);}
 
@@ -5904,11 +5957,11 @@ function predictAimTarget(shooter, target){
   const cx=shooter.x+TS/2, cy=shooter.y+TS/2;
   const tx=target.x+TS/2,  ty=target.y+TS/2;
   const isCannon=shooter.gun.id==='cannon';
-  const bspd=(isCannon?9:shooter.gun.bspd)*(shooter.bMult||1);
+  const bspd=(isCannon?9:shooter.gun.bspd)*((shooter.bMult)||1);
 
   // Tốc độ di chuyển của player (pixel/frame) — dùng dirX/dirY + speed
-  const pvx=(target.dirX||0)*target.speed;
-  const pvy=(target.dirY||0)*target.speed;
+  const pvx=((target.dirX||0)*((target.speed)||2));
+  const pvy=((target.dirY||0)*((target.speed)||2));
 
   // Nếu player đứng yên → bắn thẳng
   if(Math.abs(pvx)<0.01&&Math.abs(pvy)<0.01) return {x:target.x,y:target.y};
@@ -6029,7 +6082,7 @@ const NaiveBayes = (() => {
       classify();
     },
     noteShot(){shotF++;},
-    reset(){observations=[];playerStyle='aggressive';prevPos=null;shotF=0;obsF=0;coverTarget=null;walkGrid=null;},
+    reset(){observations=[];playerStyle='aggressive';prevPos=null;shotF=0;obsF=0;},
     config(){
       return{
         aggressive:{preferDist:160,fireThresh:0.75},
@@ -6449,6 +6502,7 @@ function checkWin(){
 }
 function endGame(playerWon){
   running=false;
+  _loopRunning=false;
   // Dọn online timer
   if(_onlineTimerInterval){clearInterval(_onlineTimerInterval);_onlineTimerInterval=null;}
   const _timerEl=document.getElementById('online-match-timer');
@@ -6588,7 +6642,7 @@ function doRematch(){
   document.getElementById('victory-screen').classList.remove('show');
   const existNext=document.getElementById('btn-next-stage');
   if(existNext)existNext.remove();
-  running=false; paused=false;
+  running=false; paused=false; _loopRunning=false;
   players=[];bullets=[];effects=[];dmgNumbers=[];items=[];
   document.getElementById('game-wrapper').style.display='none';
   document.getElementById('pause-hud-btn').innerHTML='⏸ PAUSE <span style="opacity:.5;font-size:.5rem">[ESC]</span>';
@@ -6598,6 +6652,10 @@ function doRematch(){
   } else if(isCampaign && campAiConfig){
     selectedStageId=campStageId;
     _openCharSelectForCampaign(campAiConfig);
+  } else if(!isCampaign && campAiConfig && currentPracticeConfig){
+    // Practice rematch: mở lại char select với cùng config
+    pendingStage = campAiConfig;
+    _openCharSelectForVsAI();
   } else {
     _openCharSelectForVsAI();
   }
@@ -6857,7 +6915,7 @@ function draw(){
       ctx.fillRect(pbX,pbY,90*charge,8);
       ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1;ctx.strokeRect(pbX,pbY,90,8);
       // Label ST
-      const dmgLabel=charge>0.15?'💥 ST: 60':'🔵 ST: 30';
+      const dmgLabel=charge>0.15?'💥 ST: 30':'🔵 ST: 10';
       ctx.fillStyle='#fff';ctx.font='bold 9px Orbitron,monospace';ctx.textAlign='center';ctx.textBaseline='bottom';
       ctx.fillText(dmgLabel,cx,pbY-2);
     }
