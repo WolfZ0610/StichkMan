@@ -689,6 +689,7 @@ canvas{display:block;cursor:crosshair}
 .aic-e-nb  {border-left-color:var(--red2);   }
 .aic-e-pa  {border-left-color:#4facfe;       }
 .aic-e-cv  {border-left-color:rgba(255,255,255,.25)}
+.aic-e-im  {border-left-color:#fb923c}
 .aic-tag{
   display:inline-block;padding:0px 5px;border-radius:2px;
   font-size:.5rem;letter-spacing:1px;margin-right:4px;font-weight:700;
@@ -701,6 +702,7 @@ canvas{display:block;cursor:crosshair}
 .tag-nb  {background:rgba(255,92,117,.15);color:var(--red2);}
 .tag-pa  {background:rgba(79,172,254,.15);color:#4facfe;}
 .tag-cv  {background:rgba(255,255,255,.07);color:rgba(255,255,255,.4);}
+.tag-im  {background:rgba(251,146,60,.15);color:#fb923c;}
 .aic-val {color:#fff;font-weight:600;}
 .aic-dim {color:rgba(255,255,255,.3);}
 .aic-good{color:var(--green);}
@@ -809,6 +811,21 @@ canvas{display:block;cursor:crosshair}
   border-color:rgba(79,172,254,.95)!important;
   background:linear-gradient(135deg,rgba(79,172,254,.1),rgba(79,172,254,.03));
 }
+#algocard-im.running{
+  box-shadow:0 0 0 1px rgba(251,146,60,.9),0 0 18px rgba(251,146,60,.6),inset 0 0 14px rgba(251,146,60,.08);
+  border-color:rgba(251,146,60,.95)!important;
+  background:linear-gradient(135deg,rgba(251,146,60,.1),rgba(251,146,60,.03));
+}
+#algocard-cv.running{
+  box-shadow:0 0 0 1px rgba(192,132,252,.9),0 0 18px rgba(192,132,252,.6),inset 0 0 14px rgba(192,132,252,.08);
+  border-color:rgba(192,132,252,.95)!important;
+  background:linear-gradient(135deg,rgba(192,132,252,.1),rgba(192,132,252,.03));
+}
+#algocard-mm.running{
+  box-shadow:0 0 0 1px rgba(34,211,238,.9),0 0 18px rgba(34,211,238,.6),inset 0 0 14px rgba(34,211,238,.08);
+  border-color:rgba(34,211,238,.95)!important;
+  background:linear-gradient(135deg,rgba(34,211,238,.1),rgba(34,211,238,.03));
+}
 /* Dot pulse khi running */
 .algo-card.running .algo-card-dot{
   animation:algoDotSpin .4s ease-in-out infinite alternate;
@@ -833,6 +850,9 @@ canvas{display:block;cursor:crosshair}
 #algocard-as .algo-live-badge{background:#a78bfa}
 #algocard-nb .algo-live-badge{background:var(--red2)}
 #algocard-pa .algo-live-badge{background:#4facfe}
+#algocard-im .algo-live-badge{background:#fb923c}
+#algocard-cv .algo-live-badge{background:#c084fc}
+#algocard-mm .algo-live-badge{background:#22d3ee}
 @keyframes liveBlink{0%,100%{opacity:1}50%{opacity:.4}}
 .algo-card-hd{
   display:flex;align-items:center;gap:6px;margin-bottom:4px;
@@ -2777,6 +2797,21 @@ canvas{display:block;cursor:crosshair}
         <div class="algo-card-desc">Dự đoán vị trí tương lai địch. t=dist/bspd, Newton 3 vòng. Thêm spread tỉ lệ khoảng cách.</div>
         <div class="algo-card-stats"><span class="acs-chip" id="achip-pa-lead">Lead: —</span><span class="acs-chip" id="achip-pa-calls">Calls: 0</span></div>
       </div>
+      <div class="algo-card off" id="algocard-mm" style="border-color:rgba(34,211,238,.22)">
+        <div class="algo-card-hd"><div class="algo-card-dot" style="background:#22d3ee"></div><div class="algo-card-name" style="color:#22d3ee">MINIMAX</div><span class="algo-live-badge">◉ LIVE</span></div>
+        <div class="algo-card-desc">Game tree depth-first. Tối đa hoá lợi thế bot, tối thiểu hoá lợi thế player. Nền tảng của Alpha-Beta.</div>
+        <div class="algo-card-stats"><span class="acs-chip" id="achip-mm-depth">Depth: —</span><span class="acs-chip" id="achip-mm-nodes">Nodes: 0</span></div>
+      </div>
+      <div class="algo-card off" id="algocard-im" style="border-color:rgba(251,146,60,.22)">
+        <div class="algo-card-hd"><div class="algo-card-dot" style="background:#fb923c"></div><div class="algo-card-name" style="color:#fb923c">INFLUENCE MAP</div><span class="algo-live-badge">◉ LIVE</span></div>
+        <div class="algo-card-desc">Bản đồ nhiệt nguy hiểm theo hướng đạn bay. Grid 40px, attenuation 0.88/tick. SA + HC dùng làm oracle.</div>
+        <div class="algo-card-stats"><span class="acs-chip" id="achip-im-danger">Danger: —</span><span class="acs-chip" id="achip-im-updates">Updates: 0</span></div>
+      </div>
+      <div class="algo-card off" id="algocard-cv" style="border-color:rgba(192,132,252,.22)">
+        <div class="algo-card-hd"><div class="algo-card-dot" style="background:#c084fc"></div><div class="algo-card-name" style="color:#c084fc">COVER SYSTEM</div><span class="algo-live-badge">◉ LIVE</span></div>
+        <div class="algo-card-desc">Tìm điểm nấp tối ưu khi HP thấp / reload. Score = LOS + khoảng cách + IM danger. Kích hoạt BT-COVER.</div>
+        <div class="algo-card-stats"><span class="acs-chip" id="achip-cv-state">State: —</span><span class="acs-chip" id="achip-cv-score">Score: —</span></div>
+      </div>
     </div>
   </div>
 </div><!-- #ai-console -->
@@ -4403,16 +4438,24 @@ function goPractice(difficulty) {
   const practiceStage = {
     id: 0,
     name: 'LUYỆN TẬP — ' + cfg.name,
-    aiChar: cfg.aiChar,
-    aiGun:  cfg.aiGun,
-    aiSpeedMult:  cfg.aiSpeedMult,
-    useSA:        cfg.useSA,
-    useHC:        cfg.useHC,
-    useAstar:     cfg.useAstar,
-    hpBonus:      cfg.hpBonus,
-    fireRateBoost:cfg.fireRateBoost,
-    coinReward:   cfg.coinReward,
-    map:          cfg.map,
+    aiChar:        cfg.aiChar,
+    aiGun:         cfg.aiGun,
+    aiSpeedMult:   cfg.aiSpeedMult,
+    // ── Tất cả flag thuật toán ──
+    useSA:         cfg.useSA,
+    useHC:         cfg.useHC,
+    useAstar:      cfg.useAstar,
+    usePredictive: cfg.usePredictive,   // FIX: thiếu → PA card luôn off
+    useIM:         cfg.useIM,           // FIX: thiếu → IM card luôn off
+    useCover:      cfg.useCover,        // FIX: thiếu → Cover card luôn off
+    useNB:         cfg.useNB,           // FIX: thiếu → NB card luôn off
+    btStates:      cfg.btStates,        // FIX: thiếu → BT states không đủ
+    minimaxDepth:  cfg.minimaxDepth,    // FIX: thiếu → AB card luôn off
+    // ── Stat ──
+    hpBonus:       cfg.hpBonus,
+    fireRateBoost: cfg.fireRateBoost,
+    coinReward:    cfg.coinReward,
+    map:           cfg.map,
     mapTheme: { bg:'#060810', obstacleCol:'#111830', obstacleStroke:'#2a3a6a', glowCol:'rgba(100,150,255,0.1)' }
   };
 
@@ -7095,6 +7138,7 @@ const AIC = (() => {
   let abCallsTotal = 0, abCutsTotal = 0;
   let astarCallsTotal = 0;
   let paCallsTotal = 0;
+  let imUpdateCount = 0;
   let hcLastScore = null;
   let saLastTemp = null;
   let saLastDanger = null;
@@ -7164,19 +7208,26 @@ const AIC = (() => {
   // ── Update algo cards on/off based on current config ──
   function syncAlgoCards() {
     const cfg = campAiConfig || {};
+    const depth = cfg.minimaxDepth || 0;
     const map = {
       'algocard-bt': true,
-      'algocard-ab': (cfg.minimaxDepth || 0) > 1,
+      'algocard-mm': depth >= 1,                    // Minimax: bất kỳ depth nào
+      'algocard-ab': depth > 1,                     // Alpha-Beta: depth > 1 mới có pruning
       'algocard-hc': !!cfg.useHC,
       'algocard-sa': !!cfg.useSA,
       'algocard-as': !!cfg.useAstar,
       'algocard-nb': !!cfg.useNB,
       'algocard-pa': !!cfg.usePredictive,
+      'algocard-im': !!cfg.useIM,
+      'algocard-cv': !!cfg.useCover,
     };
     for (const [id, on] of Object.entries(map)) {
       const el = document.getElementById(id);
       if (el) { el.classList.toggle('on', on); el.classList.toggle('off', !on); }
     }
+    // Hiển thị depth lên MM chip
+    const mmDepth = document.getElementById('achip-mm-depth');
+    if (mmDepth) mmDepth.textContent = depth >= 1 ? `Depth: ${depth}` : 'Depth: —';
   }
 
   // ── Patch: BehaviorTree.tick → log state transitions ──
@@ -7266,6 +7317,38 @@ const AIC = (() => {
       }
       const ca3 = document.getElementById('achip-ab-calls'); if (ca3) ca3.textContent = `Calls:${abCallsTotal}`;
       const ca4 = document.getElementById('achip-ab-cuts'); if (ca4) ca4.textContent = `Cuts:${abCutsTotal}`;
+
+      // Minimax — sáng mỗi khi AB quyết định (AB luôn dựa trên Minimax)
+      if (cfg.minimaxDepth >= 1) {
+        markActive('algocard-mm');
+        const mmN = document.getElementById('achip-mm-nodes');
+        if (mmN) mmN.textContent = `Nodes:${abCallsTotal}`;
+        const mmD = document.getElementById('achip-mm-depth');
+        if (mmD) mmD.textContent = `Depth:${cfg.minimaxDepth}`;
+      }
+
+      // Influence Map — sáng khi useIM bật và có danger data
+      if (cfg.useIM) {
+        markActive('algocard-im');
+        if (typeof imDangerAt === 'function') {
+          const dangerNow = imDangerAt(bot.x, bot.y);
+          const cid = document.getElementById('achip-im-danger');
+          if (cid) cid.textContent = `Danger:${dangerNow.toFixed(0)}`;
+          imUpdateCount = (imUpdateCount || 0) + 1;
+          const ciu = document.getElementById('achip-im-updates');
+          if (ciu) ciu.textContent = `Updates:${imUpdateCount}`;
+        }
+      }
+
+      // Cover System — sáng khi state = COVER hoặc useCover bật
+      if (cfg.useCover) {
+        const isCovering = newState === 'COVER';
+        if (isCovering) markActive('algocard-cv');
+        const ccs = document.getElementById('achip-cv-state');
+        if (ccs) ccs.textContent = isCovering ? 'COVERING' : 'standby';
+        const csc = document.getElementById('achip-cv-score');
+        if (csc && isCovering) csc.textContent = `Active`;
+      }
     });
   };
 
@@ -7370,6 +7453,48 @@ const AIC = (() => {
     return result;
   };
 
+  // ── Patch: updateInfluenceMap → sáng IM card mỗi lần update ──
+  const _imOrig = updateInfluenceMap;
+  window.updateInfluenceMap = function() {
+    _imOrig();
+    imUpdateCount++;
+    markActive('algocard-im');
+    throttled('im', 600, () => {
+      const bot = players.find(p => p.id !== (typeof myId !== 'undefined' ? myId : 1));
+      if (!bot) return;
+      const danger = imDangerAt(bot.x, bot.y);
+      const cid = document.getElementById('achip-im-danger');
+      if (cid) cid.textContent = `Danger:${danger.toFixed(0)}`;
+      const ciu = document.getElementById('achip-im-updates');
+      if (ciu) ciu.textContent = `Updates:${imUpdateCount}`;
+      if (danger > 60) {
+        log('im','IM','cv',
+          `heat=<span class="aic-bad">${danger.toFixed(0)}</span> @ bot pos`, false);
+      }
+    });
+  };
+
+  // ── Patch: findCoverPoint → sáng Cover card khi bot tìm điểm nấp ──
+  if (typeof findCoverPoint === 'function') {
+    const _cvOrig = findCoverPoint;
+    window.findCoverPoint = function(...args) {
+      const result = _cvOrig(...args);
+      markActive('algocard-cv');
+      throttled('cv', 700, () => {
+        const sc = result ? result.score : null;
+        const ccs = document.getElementById('achip-cv-state');
+        if (ccs) ccs.textContent = result ? 'SEEKING' : 'NO COVER';
+        const csc = document.getElementById('achip-cv-score');
+        if (csc && sc != null) csc.textContent = `Score:${sc.toFixed(0)}`;
+        log('cv','CV','cv',
+          result
+            ? `cover @ <span class="aic-val">(${Math.round(result.x)},${Math.round(result.y)})</span> score=<span class="aic-good">${sc != null ? sc.toFixed(0) : '?'}</span>`
+            : `<span class="aic-bad">no cover found</span>`, false);
+      });
+      return result;
+    };
+  }
+
   // ── Hook vào startGame để reset + sync cards ──
   const _startGameOrig = typeof startGame === 'function' ? startGame : null;
   if (_startGameOrig) {
@@ -7390,7 +7515,7 @@ const AIC = (() => {
 
   function aicReset() {
     transitions = 0; lastBTState = ''; stateStartTime = Date.now();
-    abCallsTotal = 0; abCutsTotal = 0; astarCallsTotal = 0; paCallsTotal = 0;
+    abCallsTotal = 0; abCutsTotal = 0; astarCallsTotal = 0; paCallsTotal = 0; imUpdateCount = 0;
     hcLastScore = null; saLastTemp = null; hcLastDir = null; paLastLead = null;
     _lastNBStyle = ''; lastAbAction = null;
     const scroll = document.getElementById('aic-log-scroll');
