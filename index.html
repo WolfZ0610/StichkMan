@@ -687,7 +687,7 @@ canvas{display:block;cursor:crosshair}
 .aic-e-sa  {border-left-color:#ff8c00;       }
 .aic-e-as  {border-left-color:#a78bfa;       }
 .aic-e-nb  {border-left-color:var(--red2);   }
-.aic-e-pa  {border-left-color:#4facfe;       }
+
 .aic-e-cv  {border-left-color:rgba(255,255,255,.25)}
 .aic-e-im  {border-left-color:#fb923c}
 .aic-tag{
@@ -700,7 +700,7 @@ canvas{display:block;cursor:crosshair}
 .tag-sa  {background:rgba(255,140,0,.15);color:#ff8c00;}
 .tag-as  {background:rgba(167,139,250,.15);color:#a78bfa;}
 .tag-nb  {background:rgba(255,92,117,.15);color:var(--red2);}
-.tag-pa  {background:rgba(79,172,254,.15);color:#4facfe;}
+
 .tag-cv  {background:rgba(255,255,255,.07);color:rgba(255,255,255,.4);}
 .tag-im  {background:rgba(251,146,60,.15);color:#fb923c;}
 .aic-val {color:#fff;font-weight:600;}
@@ -805,11 +805,6 @@ canvas{display:block;cursor:crosshair}
   box-shadow:0 0 0 1px rgba(255,92,117,.9),0 0 18px rgba(255,92,117,.6),inset 0 0 14px rgba(255,92,117,.08);
   border-color:rgba(255,92,117,.95)!important;
   background:linear-gradient(135deg,rgba(255,92,117,.1),rgba(255,92,117,.03));
-}
-#algocard-pa.running{
-  box-shadow:0 0 0 1px rgba(79,172,254,.9),0 0 18px rgba(79,172,254,.6),inset 0 0 14px rgba(79,172,254,.08);
-  border-color:rgba(79,172,254,.95)!important;
-  background:linear-gradient(135deg,rgba(79,172,254,.1),rgba(79,172,254,.03));
 }
 #algocard-im.running{
   box-shadow:0 0 0 1px rgba(251,146,60,.9),0 0 18px rgba(251,146,60,.6),inset 0 0 14px rgba(251,146,60,.08);
@@ -2767,11 +2762,6 @@ canvas{display:block;cursor:crosshair}
         <div class="algo-card-desc">Máy trạng thái 5 state: ENGAGE · CHASE · COVER · HEAL · AMBUSH. Ưu tiên theo HP%, danger, LOS.</div>
         <div class="algo-card-stats"><span class="acs-chip" id="achip-bt-state">State: —</span><span class="acs-chip" id="achip-bt-trans">Trans: 0</span></div>
       </div>
-      <div class="algo-card off" id="algocard-ab" style="border-color:rgba(245,200,66,.25)">
-        <div class="algo-card-hd"><div class="algo-card-dot" style="background:var(--gold2)"></div><div class="algo-card-name" style="color:var(--gold2)">ALPHA-BETA PRUNING</div><span class="algo-live-badge">◉ LIVE</span></div>
-        <div class="algo-card-desc">Minimax 2-ply, α-β. 8 bot actions × 4 player reactions. Quyết định có bắn không mỗi frame.</div>
-        <div class="algo-card-stats"><span class="acs-chip" id="achip-ab-calls">Calls: 0</span><span class="acs-chip" id="achip-ab-cuts">Cuts: 0</span><span class="acs-chip" id="achip-ab-act">—</span></div>
-      </div>
       <div class="algo-card off" id="algocard-hc" style="border-color:rgba(0,255,157,.2)">
         <div class="algo-card-hd"><div class="algo-card-dot" style="background:var(--green)"></div><div class="algo-card-name" style="color:var(--green)">HILL CLIMBING</div><span class="algo-live-badge">◉ LIVE</span></div>
         <div class="algo-card-desc">Tìm hướng tối ưu qua score(LOS, khoảng cách lý tưởng, góc map, Influence Map). 8 hướng thử.</div>
@@ -2786,21 +2776,6 @@ canvas{display:block;cursor:crosshair}
         <div class="algo-card-hd"><div class="algo-card-dot" style="background:#a78bfa"></div><div class="algo-card-name" style="color:#a78bfa">A* PATHFINDING</div><span class="algo-live-badge">◉ LIVE</span></div>
         <div class="algo-card-desc">f(n)=g(n)+h(n), h=Manhattan. Grid 40px, 8 hướng, chống corner-cut. Max 200 iterations.</div>
         <div class="algo-card-stats"><span class="acs-chip" id="achip-as-path">Path: —</span><span class="acs-chip" id="achip-as-calls">Calls: 0</span></div>
-      </div>
-      <div class="algo-card off" id="algocard-nb" style="border-color:rgba(255,92,117,.22)">
-        <div class="algo-card-hd"><div class="algo-card-dot" style="background:var(--red2)"></div><div class="algo-card-name" style="color:var(--red2)">NAIVE BAYES</div><span class="algo-live-badge">◉ LIVE</span></div>
-        <div class="algo-card-desc">Phân loại địch: aggressive/defensive/sniper. Log-likelihood 4 features. Cập nhật mỗi 20 frames.</div>
-        <div class="algo-card-stats"><span class="acs-chip" id="achip-nb-class">Class: —</span><span class="acs-chip" id="achip-nb-obs">Obs: 0</span></div>
-      </div>
-      <div class="algo-card off" id="algocard-pa" style="border-color:rgba(79,172,254,.22)">
-        <div class="algo-card-hd"><div class="algo-card-dot" style="background:#4facfe"></div><div class="algo-card-name" style="color:#4facfe">PREDICTIVE AIM</div><span class="algo-live-badge">◉ LIVE</span></div>
-        <div class="algo-card-desc">Dự đoán vị trí tương lai địch. t=dist/bspd, Newton 3 vòng. Thêm spread tỉ lệ khoảng cách.</div>
-        <div class="algo-card-stats"><span class="acs-chip" id="achip-pa-lead">Lead: —</span><span class="acs-chip" id="achip-pa-calls">Calls: 0</span></div>
-      </div>
-      <div class="algo-card off" id="algocard-mm" style="border-color:rgba(34,211,238,.22)">
-        <div class="algo-card-hd"><div class="algo-card-dot" style="background:#22d3ee"></div><div class="algo-card-name" style="color:#22d3ee">MINIMAX</div><span class="algo-live-badge">◉ LIVE</span></div>
-        <div class="algo-card-desc">Game tree depth-first. Tối đa hoá lợi thế bot, tối thiểu hoá lợi thế player. Nền tảng của Alpha-Beta.</div>
-        <div class="algo-card-stats"><span class="acs-chip" id="achip-mm-depth">Depth: —</span><span class="acs-chip" id="achip-mm-nodes">Nodes: 0</span></div>
       </div>
       <div class="algo-card off" id="algocard-im" style="border-color:rgba(251,146,60,.22)">
         <div class="algo-card-hd"><div class="algo-card-dot" style="background:#fb923c"></div><div class="algo-card-name" style="color:#fb923c">INFLUENCE MAP</div><span class="algo-live-badge">◉ LIVE</span></div>
@@ -7165,14 +7140,12 @@ const AIC = (() => {
   let stateStartTime = Date.now();
   let abCallsTotal = 0, abCutsTotal = 0;
   let astarCallsTotal = 0;
-  let paCallsTotal = 0;
   let imUpdateCount = 0;
   let hcLastScore = null;
   let saLastTemp = null;
   let saLastDanger = null;
   let hcLastDir = null;
   let astarLastPath = null;
-  let paLastLead = null;
   let lastAbAction = null;
 
   // Throttle — không ghi log quá 20/s per loại
@@ -7245,7 +7218,6 @@ const AIC = (() => {
       'algocard-sa': !!cfg.useSA,
       'algocard-as': !!cfg.useAstar,
       'algocard-nb': !!cfg.useNB,
-      'algocard-pa': !!cfg.usePredictive,
       'algocard-im': !!cfg.useIM,
       'algocard-cv': !!cfg.useCover,
     };
@@ -7330,11 +7302,6 @@ const AIC = (() => {
       const ca = document.getElementById('achip-as-calls'); if (ca) ca.textContent = `Calls:${astarCallsTotal}`;
       if (astarLastPath !== null) {
         const cap = document.getElementById('achip-as-path'); if (cap) cap.textContent = astarLastPath ? 'found' : 'none';
-      }
-      // PA
-      const cp = document.getElementById('achip-pa-calls'); if (cp) cp.textContent = `Calls:${paCallsTotal}`;
-      if (paLastLead !== null) {
-        const cl = document.getElementById('achip-pa-lead'); if (cl) cl.textContent = `Lead:${paLastLead.toFixed(0)}px`;
       }
       // AB
       const elABc = document.getElementById('ais-ab-calls'); if (elABc) elABc.textContent = abCallsTotal;
@@ -7464,22 +7431,7 @@ const AIC = (() => {
     }
   };
 
-  // ── Patch: predictAimTarget → log lead distance ──
-  const _paOrig = predictAimTarget;
-  window.predictAimTarget = function(shooter, target) {
-    const result = _paOrig(shooter, target);
-    paCallsTotal++;
-    const lead = Math.hypot(result.x - target.x, result.y - target.y);
-    paLastLead = lead;
-    markActive('algocard-pa');
-    throttled('pa', 700, () => {
-      if (lead > 2) {
-        log('pa','PA','pa',
-          `lead <span class="aic-val">${lead.toFixed(1)}px</span> → (${Math.round(result.x)},${Math.round(result.y)})`);
-      }
-    });
-    return result;
-  };
+
 
   // ── Patch: updateInfluenceMap → sáng IM card mỗi lần update ──
   const _imOrig = updateInfluenceMap;
@@ -7543,9 +7495,9 @@ const AIC = (() => {
 
   function aicReset() {
     transitions = 0; lastBTState = ''; stateStartTime = Date.now();
-    abCallsTotal = 0; abCutsTotal = 0; astarCallsTotal = 0; paCallsTotal = 0; imUpdateCount = 0;
-    hcLastScore = null; saLastTemp = null; hcLastDir = null; paLastLead = null;
-    _lastNBStyle = ''; lastAbAction = null;
+    abCallsTotal = 0; abCutsTotal = 0; astarCallsTotal = 0; imUpdateCount = 0;
+    hcLastScore = null; saLastTemp = null; hcLastDir = null;
+    
     const scroll = document.getElementById('aic-log-scroll');
     if (scroll) scroll.innerHTML = '';
     logEntries = 0;
