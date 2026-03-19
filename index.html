@@ -682,11 +682,11 @@ canvas{display:block;cursor:crosshair}
 @keyframes aicIn{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:none}}
 .aic-entry:hover{background:rgba(255,255,255,.025)}
 .aic-e-bt  {border-left-color:var(--cyan);   }
-.aic-e-ab  {border-left-color:var(--gold2);  }
+
 .aic-e-hc  {border-left-color:var(--green);  }
 .aic-e-sa  {border-left-color:#ff8c00;       }
 .aic-e-as  {border-left-color:#a78bfa;       }
-.aic-e-nb  {border-left-color:var(--red2);   }
+
 .aic-e-pa  {border-left-color:#4facfe;       }
 .aic-e-cv  {border-left-color:rgba(255,255,255,.25)}
 .aic-e-im  {border-left-color:#fb923c}
@@ -695,11 +695,11 @@ canvas{display:block;cursor:crosshair}
   font-size:.5rem;letter-spacing:1px;margin-right:4px;font-weight:700;
 }
 .tag-bt  {background:rgba(0,212,255,.15);color:var(--cyan);}
-.tag-ab  {background:rgba(245,200,66,.15);color:var(--gold2);}
+
 .tag-hc  {background:rgba(0,255,157,.12);color:var(--green);}
 .tag-sa  {background:rgba(255,140,0,.15);color:#ff8c00;}
 .tag-as  {background:rgba(167,139,250,.15);color:#a78bfa;}
-.tag-nb  {background:rgba(255,92,117,.15);color:var(--red2);}
+
 .tag-pa  {background:rgba(79,172,254,.15);color:#4facfe;}
 .tag-cv  {background:rgba(255,255,255,.07);color:rgba(255,255,255,.4);}
 .tag-im  {background:rgba(251,146,60,.15);color:#fb923c;}
@@ -781,11 +781,7 @@ canvas{display:block;cursor:crosshair}
   border-color:rgba(0,212,255,.95)!important;
   background:linear-gradient(135deg,rgba(0,212,255,.1),rgba(0,212,255,.03));
 }
-#algocard-ab.running{
-  box-shadow:0 0 0 1px rgba(245,200,66,.9),0 0 18px rgba(245,200,66,.6),inset 0 0 14px rgba(245,200,66,.08);
-  border-color:rgba(245,200,66,.95)!important;
-  background:linear-gradient(135deg,rgba(245,200,66,.1),rgba(245,200,66,.03));
-}
+
 #algocard-hc.running{
   box-shadow:0 0 0 1px rgba(0,255,157,.9),0 0 18px rgba(0,255,157,.6),inset 0 0 14px rgba(0,255,157,.08);
   border-color:rgba(0,255,157,.95)!important;
@@ -801,11 +797,7 @@ canvas{display:block;cursor:crosshair}
   border-color:rgba(167,139,250,.95)!important;
   background:linear-gradient(135deg,rgba(167,139,250,.1),rgba(167,139,250,.03));
 }
-#algocard-nb.running{
-  box-shadow:0 0 0 1px rgba(255,92,117,.9),0 0 18px rgba(255,92,117,.6),inset 0 0 14px rgba(255,92,117,.08);
-  border-color:rgba(255,92,117,.95)!important;
-  background:linear-gradient(135deg,rgba(255,92,117,.1),rgba(255,92,117,.03));
-}
+
 #algocard-pa.running{
   box-shadow:0 0 0 1px rgba(79,172,254,.9),0 0 18px rgba(79,172,254,.6),inset 0 0 14px rgba(79,172,254,.08);
   border-color:rgba(79,172,254,.95)!important;
@@ -821,11 +813,7 @@ canvas{display:block;cursor:crosshair}
   border-color:rgba(192,132,252,.95)!important;
   background:linear-gradient(135deg,rgba(192,132,252,.1),rgba(192,132,252,.03));
 }
-#algocard-mm.running{
-  box-shadow:0 0 0 1px rgba(34,211,238,.9),0 0 18px rgba(34,211,238,.6),inset 0 0 14px rgba(34,211,238,.08);
-  border-color:rgba(34,211,238,.95)!important;
-  background:linear-gradient(135deg,rgba(34,211,238,.1),rgba(34,211,238,.03));
-}
+
 /* Dot pulse khi running */
 .algo-card.running .algo-card-dot{
   animation:algoDotSpin .4s ease-in-out infinite alternate;
@@ -2739,22 +2727,14 @@ canvas{display:block;cursor:crosshair}
         <div class="ais-row"><span class="ais-key">Lần chuyển trạng thái</span><span class="ais-val" id="ais-transitions" style="color:var(--gold2)">0</span></div>
       </div>
       <div class="ais-section">
-        <div class="ais-sec-label">NaiveBayes — Phân loại địch</div>
-        <div class="ais-row"><span class="ais-key">Phong cách</span><span class="ais-val" id="ais-nb-style" style="color:var(--red2)">—</span></div>
-        <div class="ais-row"><span class="ais-key">Quan sát</span><span class="ais-val" id="ais-nb-obs" style="color:rgba(255,255,255,.5)">0</span></div>
-        <div class="ais-row"><span class="ais-key">Prefer dist</span><span class="ais-val" id="ais-nb-dist" style="color:var(--amber)">—</span></div>
-      </div>
-      <div class="ais-section">
-        <div class="ais-sec-label">Alpha-Beta — Quyết định bắn</div>
-        <div class="ais-row"><span class="ais-key">Hành động</span><span class="ais-val" id="ais-ab-action" style="color:var(--gold2);font-size:.55rem">—</span></div>
-        <div class="ais-row"><span class="ais-key">Nodes gọi</span><span class="ais-val" id="ais-ab-calls" style="color:rgba(255,255,255,.5)">0</span></div>
-        <div class="ais-row"><span class="ais-key">Pruned</span><span class="ais-val" id="ais-ab-cuts" style="color:var(--red2)">0</span></div>
-      </div>
-      <div class="ais-section">
-        <div class="ais-sec-label">SA · HC · A*</div>
-        <div class="ais-row"><span class="ais-key">SA temperature</span><span class="ais-val" id="ais-sa-temp" style="color:#ff8c00">—</span></div>
+        <div class="ais-sec-label">Hill Climbing · A*</div>
         <div class="ais-row"><span class="ais-key">HC best score</span><span class="ais-val" id="ais-hc-score" style="color:var(--green)">—</span></div>
         <div class="ais-row"><span class="ais-key">A* calls</span><span class="ais-val" id="ais-as-len" style="color:#a78bfa">0</span></div>
+      </div>
+      <div class="ais-section">
+        <div class="ais-sec-label">Simulated Annealing</div>
+        <div class="ais-row"><span class="ais-key">Temperature</span><span class="ais-val" id="ais-sa-temp" style="color:#ff8c00">—</span></div>
+        <div class="ais-row"><span class="ais-key">Danger @ bot</span><span class="ais-val" id="ais-sa-danger-val" style="color:var(--red2)">—</span></div>
       </div>
     </div>
   </div>
@@ -2764,43 +2744,28 @@ canvas{display:block;cursor:crosshair}
     <div id="aic-algo-pane" style="flex:1;overflow-y:auto;padding:8px 9px">
       <div class="algo-card off" id="algocard-bt" style="border-color:rgba(0,212,255,.25)">
         <div class="algo-card-hd"><div class="algo-card-dot" style="background:var(--cyan)"></div><div class="algo-card-name" style="color:var(--cyan)">BEHAVIOR TREE</div><span class="algo-live-badge">◉ LIVE</span></div>
-        <div class="algo-card-desc">Máy trạng thái 5 state: ENGAGE · CHASE · COVER · HEAL · AMBUSH. Ưu tiên theo HP%, danger, LOS.</div>
+        <div class="algo-card-desc">Bộ điều phối trung tâm. Priority selector: ENGAGE → CHASE → HEAL → COVER. Giữ state tối thiểu 280ms chống flicker.</div>
         <div class="algo-card-stats"><span class="acs-chip" id="achip-bt-state">State: —</span><span class="acs-chip" id="achip-bt-trans">Trans: 0</span></div>
-      </div>
-      <div class="algo-card off" id="algocard-ab" style="border-color:rgba(245,200,66,.25)">
-        <div class="algo-card-hd"><div class="algo-card-dot" style="background:var(--gold2)"></div><div class="algo-card-name" style="color:var(--gold2)">ALPHA-BETA PRUNING</div><span class="algo-live-badge">◉ LIVE</span></div>
-        <div class="algo-card-desc">Minimax 2-ply, α-β. 8 bot actions × 4 player reactions. Quyết định có bắn không mỗi frame.</div>
-        <div class="algo-card-stats"><span class="acs-chip" id="achip-ab-calls">Calls: 0</span><span class="acs-chip" id="achip-ab-cuts">Cuts: 0</span><span class="acs-chip" id="achip-ab-act">—</span></div>
       </div>
       <div class="algo-card off" id="algocard-hc" style="border-color:rgba(0,255,157,.2)">
         <div class="algo-card-hd"><div class="algo-card-dot" style="background:var(--green)"></div><div class="algo-card-name" style="color:var(--green)">HILL CLIMBING</div><span class="algo-live-badge">◉ LIVE</span></div>
-        <div class="algo-card-desc">Tìm hướng tối ưu qua score(LOS, khoảng cách lý tưởng, góc map, Influence Map). 8 hướng thử.</div>
+        <div class="algo-card-desc">Định vị chiến thuật. Heuristic 6 yếu tố: LOS+110 · dist ideal±90 · wall−70 · corner−190 · IM · cover. 8 hướng thử.</div>
         <div class="algo-card-stats"><span class="acs-chip" id="achip-hc-dir">Dir: —</span><span class="acs-chip" id="achip-hc-score">Score: —</span></div>
       </div>
       <div class="algo-card off" id="algocard-sa" style="border-color:rgba(255,140,0,.22)">
         <div class="algo-card-hd"><div class="algo-card-dot" style="background:#ff8c00"></div><div class="algo-card-name" style="color:#ff8c00">SIMULATED ANNEALING</div><span class="algo-live-badge">◉ LIVE</span></div>
-        <div class="algo-card-desc">Né đạn dùng Influence Map. T tăng khi nguy hiểm, giảm SA_COOL=0.9 mỗi tick. Escape local min.</div>
+        <div class="algo-card-desc">Né đạn phản xạ theo Influence Map. Chấp nhận bước xấu với xác suất e^(−Δ/T). Quán tính hướng khi không thoát được.</div>
         <div class="algo-card-stats"><span class="acs-chip" id="achip-sa-temp">T=—</span><span class="acs-chip" id="achip-sa-danger">Danger: —</span></div>
       </div>
       <div class="algo-card off" id="algocard-as" style="border-color:rgba(167,139,250,.22)">
         <div class="algo-card-hd"><div class="algo-card-dot" style="background:#a78bfa"></div><div class="algo-card-name" style="color:#a78bfa">A* PATHFINDING</div><span class="algo-live-badge">◉ LIVE</span></div>
-        <div class="algo-card-desc">f(n)=g(n)+h(n), h=Manhattan. Grid 40px, 8 hướng, chống corner-cut. Max 200 iterations.</div>
+        <div class="algo-card-desc">Binary Min-Heap O(log n). Heuristic Octile Distance. 8 hướng + chống corner-cut. Giới hạn 350 iterations/frame.</div>
         <div class="algo-card-stats"><span class="acs-chip" id="achip-as-path">Path: —</span><span class="acs-chip" id="achip-as-calls">Calls: 0</span></div>
-      </div>
-      <div class="algo-card off" id="algocard-nb" style="border-color:rgba(255,92,117,.22)">
-        <div class="algo-card-hd"><div class="algo-card-dot" style="background:var(--red2)"></div><div class="algo-card-name" style="color:var(--red2)">NAIVE BAYES</div><span class="algo-live-badge">◉ LIVE</span></div>
-        <div class="algo-card-desc">Phân loại địch: aggressive/defensive/sniper. Log-likelihood 4 features. Cập nhật mỗi 20 frames.</div>
-        <div class="algo-card-stats"><span class="acs-chip" id="achip-nb-class">Class: —</span><span class="acs-chip" id="achip-nb-obs">Obs: 0</span></div>
       </div>
       <div class="algo-card off" id="algocard-pa" style="border-color:rgba(79,172,254,.22)">
         <div class="algo-card-hd"><div class="algo-card-dot" style="background:#4facfe"></div><div class="algo-card-name" style="color:#4facfe">PREDICTIVE AIM</div><span class="algo-live-badge">◉ LIVE</span></div>
-        <div class="algo-card-desc">Dự đoán vị trí tương lai địch. t=dist/bspd, Newton 3 vòng. Thêm spread tỉ lệ khoảng cách.</div>
+        <div class="algo-card-desc">Dự đoán vị trí tương lai địch. Giải phương trình va chạm bằng Newton 3 vòng lặp. Spread tỉ lệ khoảng cách.</div>
         <div class="algo-card-stats"><span class="acs-chip" id="achip-pa-lead">Lead: —</span><span class="acs-chip" id="achip-pa-calls">Calls: 0</span></div>
-      </div>
-      <div class="algo-card off" id="algocard-mm" style="border-color:rgba(34,211,238,.22)">
-        <div class="algo-card-hd"><div class="algo-card-dot" style="background:#22d3ee"></div><div class="algo-card-name" style="color:#22d3ee">MINIMAX</div><span class="algo-live-badge">◉ LIVE</span></div>
-        <div class="algo-card-desc">Game tree depth-first. Tối đa hoá lợi thế bot, tối thiểu hoá lợi thế player. Nền tảng của Alpha-Beta.</div>
-        <div class="algo-card-stats"><span class="acs-chip" id="achip-mm-depth">Depth: —</span><span class="acs-chip" id="achip-mm-nodes">Nodes: 0</span></div>
       </div>
       <div class="algo-card off" id="algocard-im" style="border-color:rgba(251,146,60,.22)">
         <div class="algo-card-hd"><div class="algo-card-dot" style="background:#fb923c"></div><div class="algo-card-name" style="color:#fb923c">INFLUENCE MAP</div><span class="algo-live-badge">◉ LIVE</span></div>
@@ -7163,7 +7128,6 @@ const AIC = (() => {
   let transitions = 0;
   let lastBTState = '';
   let stateStartTime = Date.now();
-  let abCallsTotal = 0, abCutsTotal = 0;
   let astarCallsTotal = 0;
   let paCallsTotal = 0;
   let imUpdateCount = 0;
@@ -7173,7 +7137,6 @@ const AIC = (() => {
   let hcLastDir = null;
   let astarLastPath = null;
   let paLastLead = null;
-  let lastAbAction = null;
 
   // Throttle — không ghi log quá 20/s per loại
   const _throttle = {};
@@ -7236,15 +7199,11 @@ const AIC = (() => {
   // ── Update algo cards on/off based on current config ──
   function syncAlgoCards() {
     const cfg = campAiConfig || {};
-    const depth = cfg.minimaxDepth || 0;
     const map = {
       'algocard-bt': true,
-      'algocard-mm': depth >= 1,                    // Minimax: bất kỳ depth nào
-      'algocard-ab': depth > 1,                     // Alpha-Beta: depth > 1 mới có pruning
       'algocard-hc': !!cfg.useHC,
       'algocard-sa': !!cfg.useSA,
       'algocard-as': !!cfg.useAstar,
-      'algocard-nb': !!cfg.useNB,
       'algocard-pa': !!cfg.usePredictive,
       'algocard-im': !!cfg.useIM,
       'algocard-cv': !!cfg.useCover,
@@ -7253,9 +7212,6 @@ const AIC = (() => {
       const el = document.getElementById(id);
       if (el) { el.classList.toggle('on', on); el.classList.toggle('off', !on); }
     }
-    // Hiển thị depth lên MM chip
-    const mmDepth = document.getElementById('achip-mm-depth');
-    if (mmDepth) mmDepth.textContent = depth >= 1 ? `Depth: ${depth}` : 'Depth: —';
   }
 
   // ── Patch: BehaviorTree.tick → log state transitions ──
@@ -7294,24 +7250,12 @@ const AIC = (() => {
       const chipTrans = document.getElementById('achip-bt-trans');
       if (chipTrans) chipTrans.textContent = `Trans: ${transitions}`;
 
-      // NaiveBayes
-      if (cfg.useNB) {
-        const style = NaiveBayes.style;
-        const obs   = NaiveBayes.obsCount;
-        const nbCfg = NaiveBayes.config();
-        const colMap = { aggressive: 'var(--red2)', defensive: 'var(--cyan)', sniper: 'var(--gold2)' };
-        const elS = document.getElementById('ais-nb-style');
-        if (elS) { elS.textContent = style.toUpperCase(); elS.style.color = colMap[style] || 'var(--red2)'; }
-        const elO = document.getElementById('ais-nb-obs'); if (elO) elO.textContent = obs;
-        const elD = document.getElementById('ais-nb-dist'); if (elD) elD.textContent = nbCfg ? nbCfg.preferDist : '—';
-        const c1 = document.getElementById('achip-nb-class'); if (c1) c1.textContent = `Class: ${style}`;
-        const c2 = document.getElementById('achip-nb-obs');   if (c2) c2.textContent = `Obs: ${obs}`;
-      }
-
-      // SA temp
+      // SA temp + danger
       if (saLastTemp !== null) {
         const elT = document.getElementById('ais-sa-temp');
         if (elT) elT.textContent = saLastTemp.toFixed(1);
+        const elDv = document.getElementById('ais-sa-danger-val');
+        if (elDv && saLastDanger !== null) elDv.textContent = saLastDanger.toFixed(0);
         const c = document.getElementById('achip-sa-temp'); if (c) c.textContent = `T=${saLastTemp.toFixed(1)}`;
         const cd = document.getElementById('achip-sa-danger'); if (cd && saLastDanger !== null) cd.textContent = `Danger:${saLastDanger.toFixed(0)}`;
       }
@@ -7336,26 +7280,7 @@ const AIC = (() => {
       if (paLastLead !== null) {
         const cl = document.getElementById('achip-pa-lead'); if (cl) cl.textContent = `Lead:${paLastLead.toFixed(0)}px`;
       }
-      // AB
-      const elABc = document.getElementById('ais-ab-calls'); if (elABc) elABc.textContent = abCallsTotal;
-      const elABcu = document.getElementById('ais-ab-cuts'); if (elABcu) elABcu.textContent = abCutsTotal;
-      if (lastAbAction) {
-        const elABa = document.getElementById('ais-ab-action'); if (elABa) elABa.textContent = lastAbAction;
-        const ca2 = document.getElementById('achip-ab-act'); if (ca2) ca2.textContent = lastAbAction;
-      }
-      const ca3 = document.getElementById('achip-ab-calls'); if (ca3) ca3.textContent = `Calls:${abCallsTotal}`;
-      const ca4 = document.getElementById('achip-ab-cuts'); if (ca4) ca4.textContent = `Cuts:${abCutsTotal}`;
-
-      // Minimax — sáng mỗi khi AB quyết định (AB luôn dựa trên Minimax)
-      if (cfg.minimaxDepth >= 1) {
-        markActive('algocard-mm');
-        const mmN = document.getElementById('achip-mm-nodes');
-        if (mmN) mmN.textContent = `Nodes:${abCallsTotal}`;
-        const mmD = document.getElementById('achip-mm-depth');
-        if (mmD) mmD.textContent = `Depth:${cfg.minimaxDepth}`;
-      }
-
-      // Influence Map — sáng khi useIM bật và có danger data
+      // Influence Map
       if (cfg.useIM) {
         markActive('algocard-im');
         if (typeof imDangerAt === 'function') {
@@ -7367,25 +7292,25 @@ const AIC = (() => {
           if (ciu) ciu.textContent = `Updates:${imUpdateCount}`;
         }
       }
-
-      // Cover System — sáng khi state = COVER hoặc useCover bật
+      // Cover System
       if (cfg.useCover) {
         const isCovering = newState === 'COVER';
         if (isCovering) markActive('algocard-cv');
         const ccs = document.getElementById('achip-cv-state');
         if (ccs) ccs.textContent = isCovering ? 'COVERING' : 'standby';
         const csc = document.getElementById('achip-cv-score');
-        if (csc && isCovering) csc.textContent = `Active`;
+        if (csc && isCovering) csc.textContent = 'Active';
       }
     });
   };
 
   // ── Patch: hillClimb → log khi hướng thay đổi ──
   const _hillClimbOrig = hillClimb;
-  window.hillClimb = function(bot, tgt, aggr) {
-    const result = _hillClimbOrig(bot, tgt, aggr);
+  window.hillClimb = function(bot, tgt, cfg) {
+    const result = _hillClimbOrig(bot, tgt, cfg);
+    const cfgNow = campAiConfig || {};
     hcLastDir   = result;
-    hcLastScore = hcScore(bot.x, bot.y, tgt, aggr);
+    hcLastScore = hcScore(bot.x, bot.y, tgt, cfgNow);
     markActive('algocard-hc');
     throttled('hc', 600, () => {
       const dirStr = result.dx === 0 && result.dy === 0 ? 'HOLD'
@@ -7427,41 +7352,6 @@ const AIC = (() => {
           : `<span class="aic-bad">no path</span>`);
     });
     return result;
-  };
-
-  // ── Patch: AlphaBeta.decide → log action + stats ──
-  const _abDecide = AlphaBeta.decide.bind(AlphaBeta);
-  AlphaBeta.decide = function(bot, tgt, preferDist, depth) {
-    const action = _abDecide(bot, tgt, preferDist, depth);
-    abCallsTotal += AlphaBeta.calls;
-    abCutsTotal  += AlphaBeta.cuts;
-    lastAbAction  = action ? action.name : null;
-    markActive('algocard-ab');
-    throttled('ab', 500, () => {
-      const pct = AlphaBeta.calls > 0 ? Math.round(AlphaBeta.cuts / AlphaBeta.calls * 100) : 0;
-      log('ab','A-B','ab',
-        `<span class="aic-val">${action ? action.name : '—'}</span> ` +
-        `calls=<span class="aic-dim">${AlphaBeta.calls}</span> ` +
-        `cuts=<span class="aic-bad">${AlphaBeta.cuts}</span>(${pct}%)`, true);
-    });
-    return action;
-  };
-
-  // ── Patch: NaiveBayes.observe → log khi phân loại thay đổi ──
-  const _nbObserve = NaiveBayes.observe.bind(NaiveBayes);
-  let _lastNBStyle = '';
-  NaiveBayes.observe = function(player, bot, obstacles) {
-    _nbObserve(player, bot, obstacles);
-    const style = NaiveBayes.style;
-    markActive('algocard-nb');
-    if (style !== _lastNBStyle) {
-      const colMap = { aggressive: '#ff5c75', defensive: '#00d4ff', sniper: '#f5c842' };
-      const col = colMap[style] || '#fff';
-      log('nb','NB','nb',
-        `địch phân loại → <span style="color:${col};font-weight:700">${style.toUpperCase()}</span> ` +
-        `(${NaiveBayes.obsCount} obs)`, true);
-      _lastNBStyle = style;
-    }
   };
 
   // ── Patch: predictAimTarget → log lead distance ──
@@ -7543,9 +7433,8 @@ const AIC = (() => {
 
   function aicReset() {
     transitions = 0; lastBTState = ''; stateStartTime = Date.now();
-    abCallsTotal = 0; abCutsTotal = 0; astarCallsTotal = 0; paCallsTotal = 0; imUpdateCount = 0;
-    hcLastScore = null; saLastTemp = null; hcLastDir = null; paLastLead = null;
-    _lastNBStyle = ''; lastAbAction = null;
+    astarCallsTotal = 0; paCallsTotal = 0; imUpdateCount = 0;
+    hcLastScore = null; saLastTemp = null; saLastDanger = null; hcLastDir = null; paLastLead = null;
     const scroll = document.getElementById('aic-log-scroll');
     if (scroll) scroll.innerHTML = '';
     logEntries = 0;
